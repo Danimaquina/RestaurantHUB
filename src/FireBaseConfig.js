@@ -1,11 +1,6 @@
-// Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getFirestore, collection, addDoc, getDocs, doc, updateDoc } from "firebase/firestore";
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyAjqpju5BRscl581dJBrgbaSc8wSPPkpu8",
   authDomain: "restauranthub-52c3a.firebaseapp.com",
@@ -16,6 +11,26 @@ const firebaseConfig = {
   measurementId: "G-675BXB1CG6"
 };
 
-// Initialize Firebase
+// Inicializar Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const db = getFirestore(app);
+
+// Función para obtener el número actual de reviewers y asignar NumInList
+export const getReviewersCount = async () => {
+    const snapshot = await getDocs(collection(db, "reviewers"));
+    return snapshot.size; // Número de documentos en la colección
+};
+
+// Función para agregar un reviewer a Firestore
+export const addReviewer = async (reviewerData) => {
+    const count = await getReviewersCount();
+    const newReviewer = { ...reviewerData, NumInList: count + 1 };
+    await addDoc(collection(db, "reviewers"), newReviewer);
+};
+
+export const updateReviewer = async (id, data) => {
+  const reviewerRef = doc(db, "reviewers", id);
+  await updateDoc(reviewerRef, data);
+};
+
+export { db };

@@ -159,3 +159,5 @@ vendor/
 
 # [Experimental] Generated TS type definitions
 /packages/react-native/types_generated/
+
+src/utils/apiKeys.js

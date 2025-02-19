@@ -1,21 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { FaVideo, FaRegCommentDots, FaUtensils, FaBars } from 'react-icons/fa';
 import './Sidebar.css';
 
 const Sidebar = () => {
-  const [isExpanded, setIsExpanded] = useState(window.innerWidth > 768);
+  const [isExpanded, setIsExpanded] = useState(true); // Inicialmente expandido
   const location = useLocation();
-
-  // Efecto para manejar el resize de la ventana
-  useEffect(() => {
-    const handleResize = () => {
-      setIsExpanded(window.innerWidth > 768);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Función para determinar si un enlace está activo
   const isActive = (path) => {
@@ -28,30 +18,30 @@ const Sidebar = () => {
   };
 
   return (
-    <>
-      {/* Botón para alternar el Sidebar en móviles */}
-      <button className="toggleButton" onClick={toggleSidebar}>
-        <FaBars size={20} />
-      </button>
-
-      {/* Sidebar */}
-      <div className={`sidebar ${isExpanded ? 'expanded' : ''}`}>
+    <div className={`sidebar ${isExpanded ? 'expanded' : 'collapsed'}`}>
+      {/* Contenido del sidebar */}
+      <div className="sidebar-content">
         <Link to="/" className={isActive('/')}>
           <FaVideo size={20} />
-          <span>Editar Videos</span>
+          {isExpanded && <span>Videos to Edit</span>}
         </Link>
 
         <Link to="/EditReviewers" className={isActive('/EditReviewers')}>
           <FaRegCommentDots size={20} />
-          <span>Editar Reviewers</span>
+          {isExpanded && <span>Reviewers</span>}
         </Link>
 
         <Link to="/EditRestaurants" className={isActive('/EditRestaurants')}>
           <FaUtensils size={20} />
-          <span>Editar Restaurants</span>
+          {isExpanded && <span>Restaurants</span>}
         </Link>
       </div>
-    </>
+
+      {/* Botón para alternar el Sidebar */}
+      <button className="toggleButton" onClick={toggleSidebar}>
+        <FaBars size={20} />
+      </button>
+    </div>
   );
 };
 
