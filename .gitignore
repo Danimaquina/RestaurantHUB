@@ -161,3 +161,5 @@ vendor/
 /packages/react-native/types_generated/
 
 src/utils/apiKeys.js
+src/.env*
+

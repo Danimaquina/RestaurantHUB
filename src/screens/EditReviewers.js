@@ -5,12 +5,14 @@ import "./EditReviewers.css";
 import apiKeys from "../utils/apiKeys";
 
 export default function EditReviewers() {
-    const [showForm, setShowForm] = useState(false);
     const [reviewers, setReviewers] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const reviewersPerPage = 1;
+    const [fetchingChannelId, setFetchingChannelId] = useState(false);
+    const [editingReviewerId, setEditingReviewerId] = useState(null);
+    const [tempFormData, setTempFormData] = useState({});
+    const [showForm, setShowForm] = useState(false); // Estado para mostrar/ocultar el formulario de creación
 
-    // Valores predeterminados para el formulario
     const defaultFormData = {
         avatarUrl: "",
         lastVideo: "",
@@ -20,7 +22,6 @@ export default function EditReviewers() {
     };
 
     const [formData, setFormData] = useState(defaultFormData);
-    const [editingReviewer, setEditingReviewer] = useState(null);
 
     useEffect(() => {
         fetchReviewers();
@@ -32,30 +33,47 @@ export default function EditReviewers() {
         setReviewers(reviewersList);
     };
 
-    const toggleForm = () => {
-        setShowForm(!showForm);
-        setEditingReviewer(null);
-        setFormData(defaultFormData); // Reiniciar el formulario al valor predeterminado
+    const handleUpdate = async (id) => {
+        try {
+            await updateReviewer(id, tempFormData);
+            alert("Reviewer actualizado exitosamente");
+            setEditingReviewerId(null);
+            setTempFormData({});
+            fetchReviewers();
+        } catch (error) {
+            console.error("Error al actualizar reviewer:", error);
+        }
     };
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
+    const handleCancelEdit = () => {
+        setEditingReviewerId(null);
+        setTempFormData({});
+    };
+
+    const toggleForm = () => {
+        setShowForm(!showForm);
+        setFormData(defaultFormData);
+    };
+
+    const handleChange = (e, field) => {
+        if (editingReviewerId) {
+            // Si estamos editando, actualizamos tempFormData
+            setTempFormData({ ...tempFormData, [field]: e.target.value });
+        } else {
+            // Si no, actualizamos formData (para el formulario de creación)
+            setFormData({ ...formData, [field]: e.target.value });
+        }
     };
 
     const handleSubmit = async () => {
         try {
-            if (editingReviewer) {
-                await updateReviewer(editingReviewer.id, formData);
-                alert("Reviewer actualizado exitosamente");
-            } else {
-                await addReviewer(formData);
-                alert("Reviewer creado exitosamente");
-            }
-            setFormData(defaultFormData); // Reiniciar formulario
+            await addReviewer(formData);
+            alert("Reviewer creado exitosamente");
+            setFormData(defaultFormData);
             setShowForm(false);
             fetchReviewers();
         } catch (error) {
-            console.error("Error al agregar/actualizar reviewer:", error);
+            console.error("Error al crear reviewer:", error);
         }
     };
 
@@ -70,15 +88,63 @@ export default function EditReviewers() {
     };
 
     const handleEdit = (reviewer) => {
-        setEditingReviewer(reviewer);
-        setFormData({
+        setEditingReviewerId(reviewer.id);
+        setTempFormData({
             avatarUrl: reviewer.avatarUrl,
             lastVideo: reviewer.lastVideo,
             name: reviewer.name,
             web: reviewer.web,
             channelId: reviewer.channelId,
         });
-        setShowForm(true);
+    };
+
+    const extractChannelId = async () => {
+        setFetchingChannelId(true);
+        try {
+            let channelIdentifier = "";
+            const url = new URL(editingReviewerId ? tempFormData.web : formData.web);
+
+            if (url.pathname.includes("/channel/")) {
+                // Caso en el que ya tenemos el Channel ID
+                channelIdentifier = url.pathname.split("/channel/")[1];
+                if (editingReviewerId) {
+                    setTempFormData(prev => ({ ...prev, channelId: channelIdentifier }));
+                } else {
+                    setFormData(prev => ({ ...prev, channelId: channelIdentifier }));
+                }
+                setFetchingChannelId(false);
+                return;
+            } else if (url.pathname.startsWith("/@")) {
+                // Extraemos el handle (nombre de usuario moderno)
+                channelIdentifier = url.pathname.substring(2);
+            } else {
+                throw new Error("Formato de URL de YouTube no válido");
+            }
+
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${channelIdentifier}&key=${apiKeys.YOUTUBE_API_KEY}`
+            );
+
+            if (!response.ok) {
+                throw new Error("Error al obtener datos del canal");
+            }
+
+            const data = await response.json();
+            if (data.items && data.items.length > 0) {
+                if (editingReviewerId) {
+                    setTempFormData(prev => ({ ...prev, channelId: data.items[0].snippet.channelId }));
+                } else {
+                    setFormData(prev => ({ ...prev, channelId: data.items[0].snippet.channelId }));
+                }
+            } else {
+                throw new Error("Canal no encontrado");
+            }
+        } catch (error) {
+            console.error("Error obteniendo el Channel ID:", error);
+            alert("Error obteniendo el Channel ID. Verifique la URL e intente nuevamente.");
+        } finally {
+            setFetchingChannelId(false);
+        }
     };
 
     const indexOfLastReviewer = currentPage * reviewersPerPage;
@@ -120,13 +186,63 @@ export default function EditReviewers() {
                     {currentReviewers.map(reviewer => (
                         <div key={reviewer.id} className="reviewer-card">
                             <img src={reviewer.avatarUrl} alt="Avatar" className="avatar" />
-                            <p><strong>URL del Avatar:</strong> {reviewer.avatarUrl}</p>
-                            <p><strong>Last Video Checked:</strong> {reviewer.lastVideo}</p>
-                            <button className="small-button">Cargar últimos vídeos</button>
+                            <p>
+                                <strong>URL del Avatar:</strong> 
+                                {editingReviewerId === reviewer.id ? (
+                                    <input 
+                                        type="text" 
+                                        value={tempFormData.avatarUrl} 
+                                        onChange={(e) => handleChange(e, 'avatarUrl')} 
+                                    />
+                                ) : (
+                                    reviewer.avatarUrl
+                                )}
+                            </p>
+                            <p>
+                                <strong>Last Video Checked:</strong> 
+                                {editingReviewerId === reviewer.id ? (
+                                    <>
+                                    <input 
+                                        type="text" 
+                                        value={tempFormData.lastVideo} 
+                                        onChange={(e) => handleChange(e, 'lastVideo')} 
+                                    />
 
-                            <p><strong>Name:</strong> {reviewer.name}</p>
+                                    <button className="small-button">Cargar últimos vídeos</button>
 
-                            <p><strong>Web:</strong> {reviewer.web}</p>
+
+                                    </>
+                                ) : (
+                                    reviewer.lastVideo
+                                )}
+                            </p>
+                            
+
+                            <p>
+                                <strong>Name:</strong> 
+                                {editingReviewerId === reviewer.id ? (
+                                    <input 
+                                        type="text" 
+                                        value={tempFormData.name} 
+                                        onChange={(e) => handleChange(e, 'name')} 
+                                    />
+                                ) : (
+                                    reviewer.name
+                                )}
+                            </p>
+
+                            <p>
+                                <strong>Web:</strong> 
+                                {editingReviewerId === reviewer.id ? (
+                                    <input 
+                                        type="text" 
+                                        value={tempFormData.web} 
+                                        onChange={(e) => handleChange(e, 'web')} 
+                                    />
+                                ) : (
+                                    reviewer.web
+                                )}
+                            </p>
                             <button 
                                 className="small-button" 
                                 onClick={() => window.open(reviewer.web, "_blank")}
@@ -134,15 +250,52 @@ export default function EditReviewers() {
                                 Visitar web
                             </button>
 
-                            <p><strong>Channel ID:</strong> {reviewer.channelId}</p>
-                            <button className="small-button">Obtener Channel ID</button>
+                            <p>
+                                <strong>Channel ID:</strong> 
+                                {editingReviewerId === reviewer.id ? (
+                                    <input 
+                                        type="text" 
+                                        value={tempFormData.channelId} 
+                                        onChange={(e) => handleChange(e, 'channelId')} 
+                                    />
+                                ) : (
+                                    reviewer.channelId
+                                )}
+                            </p>
 
-                            <button className="submit-button" onClick={() => handleEdit(reviewer)}>
-                                Actualizar
-                            </button>
-                            <button className="delete-button" onClick={() => handleDelete(reviewer.id)}>
-                                Eliminar Reviewer
-                            </button>
+                            {editingReviewerId === reviewer.id ? (
+                                <>
+                                    <button 
+                                            className="small-button" 
+                                            onClick={() => {
+                                                if (editingReviewerId === reviewer.id) {
+                                                    setTempFormData({ ...tempFormData, web: reviewer.web });
+                                                } else {
+                                                    setFormData({ ...formData, web: reviewer.web });
+                                                }
+                                                extractChannelId();
+                                            }}
+                                        >
+                                        Obtener Channel ID
+                                    </button>
+
+                                    <button className="submit-button" onClick={() => handleUpdate(reviewer.id)}>
+                                        Guardar
+                                    </button>
+                                    <button className="delete-button" onClick={handleCancelEdit}>
+                                        Cancelar
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button className="submit-button" onClick={() => handleEdit(reviewer)}>
+                                        Editar
+                                    </button>
+                                    <button className="delete-button" onClick={() => handleDelete(reviewer.id)}>
+                                        Eliminar Reviewer
+                                    </button>
+                                </>
+                            )}
                         </div>
                     ))}
                 </div>
@@ -152,7 +305,6 @@ export default function EditReviewers() {
                 + Crear Reviewer
             </button>
 
-            {/* Modal para Editar */}
             {showForm && (
                 <div className="modal">
                     <div className="modal-content">
@@ -162,7 +314,7 @@ export default function EditReviewers() {
                                 type="text" 
                                 name="avatarUrl" 
                                 value={formData.avatarUrl} 
-                                onChange={handleChange} 
+                                onChange={(e) => handleChange(e, 'avatarUrl')} 
                                 placeholder="https://..."
                             />
                         </label>
@@ -173,7 +325,7 @@ export default function EditReviewers() {
                                 type="text" 
                                 name="lastVideo" 
                                 value={formData.lastVideo} 
-                                onChange={handleChange} 
+                                onChange={(e) => handleChange(e, 'lastVideo')} 
                                 placeholder="Video ID"
                             />
                         </label>
@@ -184,7 +336,7 @@ export default function EditReviewers() {
                                 type="text" 
                                 name="name" 
                                 value={formData.name} 
-                                onChange={handleChange} 
+                                onChange={(e) => handleChange(e, 'name')} 
                                 placeholder="Reviewer Name"
                             />
                         </label>
@@ -195,7 +347,7 @@ export default function EditReviewers() {
                                 type="text" 
                                 name="web" 
                                 value={formData.web} 
-                                onChange={handleChange} 
+                                onChange={(e) => handleChange(e, 'web')} 
                                 placeholder="https://..."
                             />
                         </label>
@@ -206,14 +358,20 @@ export default function EditReviewers() {
                                 type="text" 
                                 name="channelId" 
                                 value={formData.channelId} 
-                                onChange={handleChange} 
+                                onChange={(e) => handleChange(e, 'channelId')} 
                                 placeholder="Channel ID"
                             />
-                            <button className="small-button">Obtener Channel ID</button>
+                            <button 
+                                className="small-button" 
+                                onClick={extractChannelId}
+                                disabled={fetchingChannelId}
+                            >
+                                {fetchingChannelId ? "Extrayendo..." : "Obtener Channel ID"}
+                            </button>
                         </label>
 
                         <button className="submit-button" onClick={handleSubmit}>
-                            {editingReviewer ? "Actualizar Reviewer" : "Crear nuevo Reviewer"}
+                            Crear nuevo Reviewer
                         </button>
 
                         <button className="close-button" onClick={toggleForm}>Cerrar</button>
