@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { db, addReviewer, updateReviewer } from "../FireBaseConfig";
-import { collection, getDocs, deleteDoc, doc } from "firebase/firestore";
+import { collection, getDocs, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import "./EditReviewers.css";
 import apiKeys from "../utils/apiKeys";
 
@@ -11,7 +11,7 @@ export default function EditReviewers() {
     const [fetchingChannelId, setFetchingChannelId] = useState(false);
     const [editingReviewerId, setEditingReviewerId] = useState(null);
     const [tempFormData, setTempFormData] = useState({});
-    const [showForm, setShowForm] = useState(false); // Estado para mostrar/ocultar el formulario de creación
+    const [showForm, setShowForm] = useState(false);
 
     const defaultFormData = {
         avatarUrl: "",
@@ -57,10 +57,8 @@ export default function EditReviewers() {
 
     const handleChange = (e, field) => {
         if (editingReviewerId) {
-            // Si estamos editando, actualizamos tempFormData
             setTempFormData({ ...tempFormData, [field]: e.target.value });
         } else {
-            // Si no, actualizamos formData (para el formulario de creación)
             setFormData({ ...formData, [field]: e.target.value });
         }
     };
@@ -105,7 +103,6 @@ export default function EditReviewers() {
             const url = new URL(editingReviewerId ? tempFormData.web : formData.web);
 
             if (url.pathname.includes("/channel/")) {
-                // Caso en el que ya tenemos el Channel ID
                 channelIdentifier = url.pathname.split("/channel/")[1];
                 if (editingReviewerId) {
                     setTempFormData(prev => ({ ...prev, channelId: channelIdentifier }));
@@ -115,7 +112,6 @@ export default function EditReviewers() {
                 setFetchingChannelId(false);
                 return;
             } else if (url.pathname.startsWith("/@")) {
-                // Extraemos el handle (nombre de usuario moderno)
                 channelIdentifier = url.pathname.substring(2);
             } else {
                 throw new Error("Formato de URL de YouTube no válido");
@@ -144,6 +140,80 @@ export default function EditReviewers() {
             alert("Error obteniendo el Channel ID. Verifique la URL e intente nuevamente.");
         } finally {
             setFetchingChannelId(false);
+        }
+    };
+
+    const fetchVideosFromChannel = async (channelId, nextPageToken = "") => {
+        try {
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=50&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&pageToken=${nextPageToken}`
+            );
+    
+            if (!response.ok) {
+                throw new Error("Error al obtener los videos del canal");
+            }
+    
+            const data = await response.json();
+            return {
+                videoIds: data.items.map(item => item.id.videoId),
+                nextPageToken: data.nextPageToken || null, // Devuelve el nextPageToken si existe
+            };
+        } catch (error) {
+            console.error("Error obteniendo los videos:", error);
+            throw error;
+        }
+    };
+
+    const saveVideoIdsToFirestore = async (videoIds, reviewerId) => {
+        try {
+            const batch = writeBatch(db); // Usa writeBatch en lugar de batch
+            const videosCollectionRef = collection(db, "VideosToEdit");
+    
+            videoIds.forEach(videoId => {
+                const videoDocRef = doc(videosCollectionRef, videoId);
+                batch.set(videoDocRef, { videoId });
+            });
+    
+            const reviewerDocRef = doc(db, "reviewers", reviewerId);
+            const lastVideoId = videoIds[0]; // El primer video es el más reciente
+            const lastVideoDate = new Date().toLocaleString(); // Fecha y hora actual
+            const lastVideoValue = `${lastVideoId} (Última carga: ${lastVideoDate})`;
+    
+            batch.update(reviewerDocRef, { lastVideo: lastVideoValue });
+    
+            await batch.commit();
+            alert("Videos guardados exitosamente en Firestore y lastVideo actualizado");
+        } catch (error) {
+            console.error("Error guardando los videos en Firestore:", error);
+            throw error;
+        }
+    };
+
+    const handleLoadVideos = async (channelId, reviewerId) => {
+        try {
+            if (!channelId) {
+                throw new Error("El Channel ID está vacío.");
+            }
+    
+            let nextPageToken = ""; // Inicializa el nextPageToken
+            let allVideoIds = []; // Almacena todos los videoIds
+    
+            // Obtener videos en bucle hasta que no haya más páginas
+            do {
+                const { videoIds, nextPageToken: newNextPageToken } = await fetchVideosFromChannel(channelId, nextPageToken);
+                allVideoIds = [...allVideoIds, ...videoIds]; // Agrega los nuevos videoIds
+                nextPageToken = newNextPageToken; // Actualiza el nextPageToken
+            } while (nextPageToken); // Continúa mientras haya un nextPageToken
+    
+            if (allVideoIds.length === 0) {
+                throw new Error("No se encontraron videos para este canal.");
+            }
+    
+            await saveVideoIdsToFirestore(allVideoIds, reviewerId);
+            fetchReviewers(); // Actualizar la lista de reviewers
+        } catch (error) {
+            console.error("Error cargando los videos:", error);
+            alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
         }
     };
 
@@ -202,22 +272,22 @@ export default function EditReviewers() {
                                 <strong>Last Video Checked:</strong> 
                                 {editingReviewerId === reviewer.id ? (
                                     <>
-                                    <input 
-                                        type="text" 
-                                        value={tempFormData.lastVideo} 
-                                        onChange={(e) => handleChange(e, 'lastVideo')} 
-                                    />
-
-                                    <button className="small-button">Cargar últimos vídeos</button>
-
-
+                                        <input 
+                                            type="text" 
+                                            value={tempFormData.lastVideo} 
+                                            onChange={(e) => handleChange(e, 'lastVideo')} 
+                                        />
+                                        <button 
+                                            className="small-button" 
+                                            onClick={() => handleLoadVideos(tempFormData.channelId, reviewer.id)}
+                                        >
+                                            Cargar últimos vídeos
+                                        </button>
                                     </>
                                 ) : (
                                     reviewer.lastVideo
                                 )}
                             </p>
-                            
-
                             <p>
                                 <strong>Name:</strong> 
                                 {editingReviewerId === reviewer.id ? (
@@ -230,7 +300,6 @@ export default function EditReviewers() {
                                     reviewer.name
                                 )}
                             </p>
-
                             <p>
                                 <strong>Web:</strong> 
                                 {editingReviewerId === reviewer.id ? (
@@ -249,7 +318,6 @@ export default function EditReviewers() {
                             >
                                 Visitar web
                             </button>
-
                             <p>
                                 <strong>Channel ID:</strong> 
                                 {editingReviewerId === reviewer.id ? (
@@ -266,19 +334,12 @@ export default function EditReviewers() {
                             {editingReviewerId === reviewer.id ? (
                                 <>
                                     <button 
-                                            className="small-button" 
-                                            onClick={() => {
-                                                if (editingReviewerId === reviewer.id) {
-                                                    setTempFormData({ ...tempFormData, web: reviewer.web });
-                                                } else {
-                                                    setFormData({ ...formData, web: reviewer.web });
-                                                }
-                                                extractChannelId();
-                                            }}
-                                        >
-                                        Obtener Channel ID
+                                        className="small-button" 
+                                        onClick={extractChannelId}
+                                        disabled={fetchingChannelId}
+                                    >
+                                        {fetchingChannelId ? "Extrayendo..." : "Obtener Channel ID"}
                                     </button>
-
                                     <button className="submit-button" onClick={() => handleUpdate(reviewer.id)}>
                                         Guardar
                                     </button>
