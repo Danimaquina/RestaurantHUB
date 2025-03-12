@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import "../screens/EditReviewers.css";
-import { db } from "../FireBaseConfig"; // Asegúrate de importar tu configuración de Firestore
+import { db } from "../FireBaseConfig";
 import { collection, getDocs, writeBatch, doc, deleteDoc } from "firebase/firestore";
 
 const ReviewerCard = ({ 
@@ -16,34 +16,47 @@ const ReviewerCard = ({
     extractChannelId, 
     fetchingChannelId 
 }) => {
+    // Estado para rastrear si se han cargado videos o eliminado documentos
+    const [pendingChanges, setPendingChanges] = useState({
+        videosLoaded: false,
+        documentDeleted: false,
+        tempLastVideo: ""
+    });
 
-    // Función para borrar la colección VideosToEdit
-    const deleteVideosToEditCollection = async () => {
+    // Función para cargar videos pero guardar el estado pendiente
+    const handleLoadVideosPending = async (channelId, reviewerId, reviewerName) => {
         try {
-            const videosCollectionRef = collection(db, "VideosToEdit");
-            const querySnapshot = await getDocs(videosCollectionRef);
-
-            const batch = writeBatch(db);
-            querySnapshot.forEach((doc) => {
-                batch.delete(doc.ref); // Añade cada documento al batch para eliminarlo
+            // Llamar a la función original para cargar videos
+            await handleLoadVideos(channelId, reviewerId, reviewerName);
+            
+            // Marcar que hay cambios pendientes
+            setPendingChanges({
+                ...pendingChanges,
+                videosLoaded: true,
+                // Guardar el valor actual de lastVideo para restaurarlo si se cancela
+                tempLastVideo: tempFormData.lastVideo
             });
-
-            await batch.commit(); // Ejecuta el batch
-            alert("Colección 'VideosToEdit' eliminada exitosamente");
-
-            // Limpiar el campo "Last Video Checked"
-            if (editingReviewerId === reviewer.id) {
-                handleChange({ target: { value: "" } }, 'lastVideo'); // Limpia el campo en el estado temporal
-            } else {
-                handleChange({ target: { value: "" } }, 'lastVideo'); // Limpia el campo en el estado del formulario
-            }
         } catch (error) {
-            console.error("Error eliminando la colección 'VideosToEdit':", error);
-            alert("Error eliminando la colección 'VideosToEdit'");
+            console.error("Error cargando los videos:", error);
         }
     };
 
-    // Función para borrar el documento específico del reviewer en la colección VideosToEdit
+    // Función para marcar el documento como pendiente de eliminación
+    const markDocumentForDeletion = () => {
+        // Guardar el valor actual de lastVideo para restaurarlo si se cancela
+        setPendingChanges({
+            ...pendingChanges,
+            documentDeleted: true,
+            tempLastVideo: tempFormData.lastVideo
+        });
+        
+        // Limpiar el campo lastVideo en la interfaz
+        handleChange({ target: { value: "" } }, 'lastVideo');
+        
+        alert(`Documento '${reviewer.name}' marcado para eliminación. Haga clic en 'Guardar' para confirmar o 'Cancelar' para descartar.`);
+    };
+
+    // Función para borrar el documento específico cuando se guarda
     const deleteReviewerDocument = async () => {
         try {
             // Referencia al documento específico del reviewer
@@ -53,17 +66,50 @@ const ReviewerCard = ({
             await deleteDoc(reviewerDocRef);
             
             alert(`Documento '${reviewer.name}' eliminado exitosamente de la colección 'VideosToEdit'`);
-
-            // Limpiar el campo "Last Video Checked"
-            if (editingReviewerId === reviewer.id) {
-                handleChange({ target: { value: "" } }, 'lastVideo'); // Limpia el campo en el estado temporal
-            } else {
-                handleChange({ target: { value: "" } }, 'lastVideo'); // Limpia el campo en el estado del formulario
-            }
         } catch (error) {
             console.error(`Error eliminando el documento '${reviewer.name}':`, error);
             alert(`Error eliminando el documento '${reviewer.name}' de la colección 'VideosToEdit'`);
         }
+    };
+
+    // Función personalizada para manejar la actualización
+    const handleUpdateWithPendingChanges = async (id) => {
+        try {
+            // Si hay un documento marcado para eliminación, eliminarlo
+            if (pendingChanges.documentDeleted) {
+                await deleteReviewerDocument();
+            }
+            
+            // Llamar a la función original de actualización
+            await handleUpdate(id);
+            
+            // Restablecer el estado de cambios pendientes
+            setPendingChanges({
+                videosLoaded: false,
+                documentDeleted: false,
+                tempLastVideo: ""
+            });
+        } catch (error) {
+            console.error("Error al actualizar con cambios pendientes:", error);
+        }
+    };
+
+    // Función personalizada para manejar la cancelación
+    const handleCancelWithPendingChanges = () => {
+        // Si hay cambios pendientes, restaurar el valor original de lastVideo
+        if (pendingChanges.documentDeleted || pendingChanges.videosLoaded) {
+            handleChange({ target: { value: pendingChanges.tempLastVideo } }, 'lastVideo');
+        }
+        
+        // Restablecer el estado de cambios pendientes
+        setPendingChanges({
+            videosLoaded: false,
+            documentDeleted: false,
+            tempLastVideo: ""
+        });
+        
+        // Llamar a la función original de cancelación
+        handleCancelEdit();
     };
 
     return (
@@ -92,7 +138,7 @@ const ReviewerCard = ({
                         />
                        <button 
                             className="small-button" 
-                                onClick={() => handleLoadVideos(tempFormData.channelId, reviewer.id, reviewer.name)}
+                            onClick={() => handleLoadVideosPending(tempFormData.channelId, reviewer.id, reviewer.name)}
                         >
                             Cargar últimos vídeos
                         </button>
@@ -100,7 +146,7 @@ const ReviewerCard = ({
                         <button 
                             className="small-button danger-button" 
                             style={{ backgroundColor: 'red', color: 'white' }}
-                            onClick={() => deleteReviewerDocument()}
+                            onClick={() => markDocumentForDeletion()}
                         >
                             Borrar documento
                         </button>
@@ -161,10 +207,16 @@ const ReviewerCard = ({
                     >
                         {fetchingChannelId ? "Extrayendo..." : "Obtener Channel ID"}
                     </button>
-                    <button className="submit-button" onClick={() => handleUpdate(reviewer.id)}>
+                    <button 
+                        className="submit-button" 
+                        onClick={() => handleUpdateWithPendingChanges(reviewer.id)}
+                    >
                         Guardar
                     </button>
-                    <button className="delete-button" onClick={handleCancelEdit}>
+                    <button 
+                        className="delete-button" 
+                        onClick={handleCancelWithPendingChanges}
+                    >
                         Cancelar
                     </button>
                 </>

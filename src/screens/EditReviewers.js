@@ -52,19 +52,9 @@ export default function EditReviewers() {
         }
     };
 
-    const handleUpdate = async (id) => {
-        try {
-            await updateReviewer(id, tempFormData);
-            alert("Reviewer actualizado exitosamente");
-            setEditingReviewerId(null);
-            setTempFormData({});
-            fetchReviewers();
-        } catch (error) {
-            console.error("Error al actualizar reviewer:", error);
-        }
-    };
-
     const handleCancelEdit = () => {
+        // Clear any pending video IDs when canceling
+        window.pendingVideoIds = null;
         setEditingReviewerId(null);
         setTempFormData({});
     };
@@ -230,14 +220,51 @@ export default function EditReviewers() {
                 throw new Error("No se encontraron videos para este canal.");
             }
     
-            await saveVideoIdsToFirestore(allVideoIds, reviewerId, reviewerName);
-            fetchReviewers(); // Actualizar la lista de reviewers
+            // Crear el valor para mostrar en la interfaz sin guardar en Firestore todavía
+            const lastVideoId = allVideoIds[0]; // El primer video es el más reciente
+            const lastVideoDate = new Date().toLocaleString(); // Fecha y hora actual
+            const lastVideoValue = `${lastVideoId} (Última carga: ${lastVideoDate})`;
+            
+            // Actualizar solo el campo en el formulario temporal
+            setTempFormData(prev => ({
+                ...prev,
+                lastVideo: lastVideoValue
+            }));
+            
+            // Guardar los IDs para usarlos cuando se guarde el formulario
+            window.pendingVideoIds = allVideoIds;
+            
+            alert("Videos cargados. Haga clic en 'Guardar' para confirmar o 'Cancelar' para descartar.");
+            
         } catch (error) {
             console.error("Error cargando los videos:", error);
             alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
         }
     };
     
+    // Modificar la función handleUpdate para guardar los videos pendientes
+    const handleUpdate = async (id) => {
+        try {
+            // Si hay videos pendientes, guardarlos en Firestore
+            if (window.pendingVideoIds && window.pendingVideoIds.length > 0) {
+                const reviewer = reviewers.find(r => r.id === id);
+                if (reviewer) {
+                    await saveVideoIdsToFirestore(window.pendingVideoIds, id, reviewer.name);
+                    // Limpiar los videos pendientes
+                    window.pendingVideoIds = null;
+                }
+            }
+            
+            await updateReviewer(id, tempFormData);
+            alert("Reviewer actualizado exitosamente");
+            setEditingReviewerId(null);
+            setTempFormData({});
+            fetchReviewers();
+        } catch (error) {
+            console.error("Error al actualizar reviewer:", error);
+        }
+    };
+
     const indexOfLastReviewer = currentPage * reviewersPerPage;
     const indexOfFirstReviewer = indexOfLastReviewer - reviewersPerPage;
     const currentReviewers = reviewers.slice(indexOfFirstReviewer, indexOfLastReviewer);
