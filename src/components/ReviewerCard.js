@@ -135,10 +135,12 @@ const ReviewerCard = ({
                             type="text" 
                             value={tempFormData.lastVideo} 
                             onChange={(e) => handleChange(e, 'lastVideo')} 
+                            placeholder="Introduce ID de video para cargar solo los más nuevos"
                         />
                        <button 
                             className="small-button" 
                             onClick={() => handleLoadVideosPending(tempFormData.channelId, reviewer.id, reviewer.name)}
+                            title="Si has introducido un ID de video, solo se cargarán los videos más nuevos según la fecha de publicación"
                         >
                             Cargar últimos vídeos
                         </button>
@@ -235,3 +237,6 @@ const ReviewerCard = ({
 };
 
 export default ReviewerCard;
+
+
+

@@ -155,7 +155,7 @@ export default function EditReviewers() {
     const fetchVideosFromChannel = async (channelId, nextPageToken = "") => {
         try {
             const response = await fetch(
-                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=50&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&pageToken=${nextPageToken}`
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&pageToken=${nextPageToken}`
             );
     
             if (!response.ok) {
@@ -164,8 +164,13 @@ export default function EditReviewers() {
     
             const data = await response.json();
             return {
-                videoIds: data.items.map(item => item.id.videoId),
-                nextPageToken: data.nextPageToken || null, // Devuelve el nextPageToken si existe
+                // Devolver los items completos para tener acceso a la fecha de publicación
+                videos: data.items.map(item => ({
+                    id: item.id.videoId,
+                    publishedAt: item.snippet.publishedAt,
+                    title: item.snippet.title
+                })),
+                nextPageToken: data.nextPageToken || null,
             };
         } catch (error) {
             console.error("Error obteniendo los videos:", error);
@@ -206,35 +211,98 @@ export default function EditReviewers() {
                 throw new Error("El Channel ID está vacío.");
             }
     
-            let nextPageToken = ""; // Inicializa el nextPageToken
-            let allVideoIds = []; // Almacena todos los videoIds
-    
-            // Obtener videos en bucle hasta que no haya más páginas
-            do {
-                const { videoIds, nextPageToken: newNextPageToken } = await fetchVideosFromChannel(channelId, nextPageToken);
-                allVideoIds = [...allVideoIds, ...videoIds]; // Agrega los nuevos videoIds
-                nextPageToken = newNextPageToken; // Actualiza el nextPageToken
-            } while (nextPageToken); // Continúa mientras haya un nextPageToken
-    
-            if (allVideoIds.length === 0) {
-                throw new Error("No se encontraron videos para este canal.");
+            let nextPageToken = "";
+            let allVideos = []; // Almacena todos los videos con sus metadatos
+            
+            // Extraer el ID del video del campo lastVideo (si existe)
+            let lastVideoId = "";
+            if (tempFormData.lastVideo) {
+                // Intentar extraer el ID del video del formato "ID (Última carga: fecha)"
+                const match = tempFormData.lastVideo.match(/^([a-zA-Z0-9_-]+)/);
+                if (match) {
+                    lastVideoId = match[1];
+                } else {
+                    // Si no coincide con el formato, usar el valor completo como ID
+                    lastVideoId = tempFormData.lastVideo;
+                }
             }
     
-            // Crear el valor para mostrar en la interfaz sin guardar en Firestore todavía
-            const lastVideoId = allVideoIds[0]; // El primer video es el más reciente
-            const lastVideoDate = new Date().toLocaleString(); // Fecha y hora actual
-            const lastVideoValue = `${lastVideoId} (Última carga: ${lastVideoDate})`;
+            // Obtener videos en lotes de 10 hasta encontrar el último video cargado
+            let foundLastVideo = false;
+            let lastVideoPublishedAt = null;
             
-            // Actualizar solo el campo en el formulario temporal
+            do {
+                const { videos, nextPageToken: newNextPageToken } = await fetchVideosFromChannel(channelId, nextPageToken);
+                
+                if (lastVideoId && !foundLastVideo) {
+                    // Buscar el video con el ID especificado
+                    const lastVideoIndex = videos.findIndex(video => video.id === lastVideoId);
+                    
+                    if (lastVideoIndex !== -1) {
+                        // Si encontramos el video, guardar su fecha de publicación
+                        lastVideoPublishedAt = new Date(videos[lastVideoIndex].publishedAt);
+                        foundLastVideo = true;
+                        
+                        // Agregar solo los videos más nuevos que el último cargado
+                        const newerVideos = videos.slice(0, lastVideoIndex);
+                        allVideos = [...allVideos, ...newerVideos];
+                        
+                        // Ya encontramos el video de referencia, no necesitamos seguir buscando
+                        break;
+                    } else {
+                        // Si no encontramos el video en esta página, agregar todos y seguir buscando
+                        allVideos = [...allVideos, ...videos];
+                    }
+                } else {
+                    // Si no hay lastVideoId o ya lo encontramos, agregar todos los videos
+                    allVideos = [...allVideos, ...videos];
+                }
+                
+                // Si no hay más páginas, salir del bucle
+                if (!newNextPageToken) {
+                    break;
+                }
+                
+                nextPageToken = newNextPageToken;
+            } while (!foundLastVideo && lastVideoId); // Continuar hasta encontrar el video o hasta que no haya más páginas
+            
+            // Si no estamos buscando un video específico, solo obtener la primera página
+            if (!lastVideoId && allVideos.length === 0) {
+                const { videos } = await fetchVideosFromChannel(channelId, "");
+                allVideos = videos;
+            }
+            
+            // Ordenar por fecha de publicación (más reciente primero)
+            allVideos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+    
+            if (allVideos.length === 0) {
+                if (lastVideoId && foundLastVideo) {
+                    throw new Error("No se encontraron videos nuevos después del último video verificado.");
+                } else if (lastVideoId) {
+                    throw new Error("No se encontró el video de referencia. Verifica el ID del video.");
+                } else {
+                    throw new Error("No se encontraron videos para este canal.");
+                }
+            }
+    
+            // Extraer solo los IDs para guardar en Firestore
+            const videoIds = allVideos.map(video => video.id);
+            
+            // Crear el valor para mostrar en la interfaz
+            const newLastVideoId = videoIds[0]; // El primer video es el más reciente
+            const lastVideoDate = new Date().toLocaleString();
+            const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
+            
+            // Actualizar el formulario temporal
             setTempFormData(prev => ({
                 ...prev,
                 lastVideo: lastVideoValue
             }));
             
             // Guardar los IDs para usarlos cuando se guarde el formulario
-            window.pendingVideoIds = allVideoIds;
+            window.pendingVideoIds = videoIds;
             
-            alert("Videos cargados. Haga clic en 'Guardar' para confirmar o 'Cancelar' para descartar.");
+            alert(`${videoIds.length} videos cargados. Haga clic en 'Guardar' para confirmar o 'Cancelar' para descartar.`);
             
         } catch (error) {
             console.error("Error cargando los videos:", error);
@@ -343,7 +411,7 @@ export default function EditReviewers() {
                             <input 
                                 type="text" 
                                 name="lastVideo" 
-                                value={formData.lastVideo} 
+                                value={tempFormData.lastVideo} 
                                 onChange={(e) => handleChange(e, 'lastVideo')} 
                                 placeholder="Video ID"
                             />
