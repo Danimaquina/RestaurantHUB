@@ -3,6 +3,7 @@ import { db, addReviewer, updateReviewer } from "../FireBaseConfig";
 import { collection, getDocs, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import "./EditReviewers.css";
 import apiKeys from "../utils/apiKeys";
+import ReviewerCard from "../components/ReviewerCard"; // Importa el nuevo componente
 
 export default function EditReviewers() {
     const [reviewers, setReviewers] = useState([]);
@@ -31,6 +32,24 @@ export default function EditReviewers() {
         const querySnapshot = await getDocs(collection(db, "reviewers"));
         const reviewersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setReviewers(reviewersList);
+    };
+
+    const deleteVideosToEditCollection = async () => {
+        try {
+            const videosCollectionRef = collection(db, "VideosToEdit");
+            const querySnapshot = await getDocs(videosCollectionRef);
+    
+            const batch = writeBatch(db);
+            querySnapshot.forEach((doc) => {
+                batch.delete(doc.ref); // Añade cada documento al batch para eliminarlo
+            });
+    
+            await batch.commit(); // Ejecuta el batch
+            alert("Colección 'VideosToEdit' eliminada exitosamente");
+        } catch (error) {
+            console.error("Error eliminando la colección 'VideosToEdit':", error);
+            alert("Error eliminando la colección 'VideosToEdit'");
+        }
     };
 
     const handleUpdate = async (id) => {
@@ -164,24 +183,26 @@ export default function EditReviewers() {
         }
     };
 
-    const saveVideoIdsToFirestore = async (videoIds, reviewerId) => {
+    const saveVideoIdsToFirestore = async (videoIds, reviewerId, reviewerName) => {
         try {
-            const batch = writeBatch(db); // Usa writeBatch en lugar de batch
+            const batch = writeBatch(db); // Usa writeBatch para operaciones en lote
             const videosCollectionRef = collection(db, "VideosToEdit");
     
-            videoIds.forEach(videoId => {
-                const videoDocRef = doc(videosCollectionRef, videoId);
-                batch.set(videoDocRef, { videoId });
-            });
+            // Crear un documento con el nombre del reviewer
+            const reviewerDocRef = doc(videosCollectionRef, reviewerName);
     
-            const reviewerDocRef = doc(db, "reviewers", reviewerId);
+            // Guardar los videoIds en un campo del documento
+            batch.set(reviewerDocRef, { videoIds });
+    
+            // Actualizar el campo "lastVideo" en el documento del reviewer
             const lastVideoId = videoIds[0]; // El primer video es el más reciente
             const lastVideoDate = new Date().toLocaleString(); // Fecha y hora actual
             const lastVideoValue = `${lastVideoId} (Última carga: ${lastVideoDate})`;
     
-            batch.update(reviewerDocRef, { lastVideo: lastVideoValue });
+            const reviewerRef = doc(db, "reviewers", reviewerId);
+            batch.update(reviewerRef, { lastVideo: lastVideoValue });
     
-            await batch.commit();
+            await batch.commit(); // Ejecutar el batch
             alert("Videos guardados exitosamente en Firestore y lastVideo actualizado");
         } catch (error) {
             console.error("Error guardando los videos en Firestore:", error);
@@ -189,7 +210,7 @@ export default function EditReviewers() {
         }
     };
 
-    const handleLoadVideos = async (channelId, reviewerId) => {
+    const handleLoadVideos = async (channelId, reviewerId, reviewerName) => {
         try {
             if (!channelId) {
                 throw new Error("El Channel ID está vacío.");
@@ -209,14 +230,14 @@ export default function EditReviewers() {
                 throw new Error("No se encontraron videos para este canal.");
             }
     
-            await saveVideoIdsToFirestore(allVideoIds, reviewerId);
+            await saveVideoIdsToFirestore(allVideoIds, reviewerId, reviewerName);
             fetchReviewers(); // Actualizar la lista de reviewers
         } catch (error) {
             console.error("Error cargando los videos:", error);
             alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
         }
     };
-
+    
     const indexOfLastReviewer = currentPage * reviewersPerPage;
     const indexOfFirstReviewer = indexOfLastReviewer - reviewersPerPage;
     const currentReviewers = reviewers.slice(indexOfFirstReviewer, indexOfLastReviewer);
@@ -254,110 +275,20 @@ export default function EditReviewers() {
                     </div>
 
                     {currentReviewers.map(reviewer => (
-                        <div key={reviewer.id} className="reviewer-card">
-                            <img src={reviewer.avatarUrl} alt="Avatar" className="avatar" />
-                            <p>
-                                <strong>URL del Avatar:</strong> 
-                                {editingReviewerId === reviewer.id ? (
-                                    <input 
-                                        type="text" 
-                                        value={tempFormData.avatarUrl} 
-                                        onChange={(e) => handleChange(e, 'avatarUrl')} 
-                                    />
-                                ) : (
-                                    reviewer.avatarUrl
-                                )}
-                            </p>
-                            <p>
-                                <strong>Last Video Checked:</strong> 
-                                {editingReviewerId === reviewer.id ? (
-                                    <>
-                                        <input 
-                                            type="text" 
-                                            value={tempFormData.lastVideo} 
-                                            onChange={(e) => handleChange(e, 'lastVideo')} 
-                                        />
-                                        <button 
-                                            className="small-button" 
-                                            onClick={() => handleLoadVideos(tempFormData.channelId, reviewer.id)}
-                                        >
-                                            Cargar últimos vídeos
-                                        </button>
-                                    </>
-                                ) : (
-                                    reviewer.lastVideo
-                                )}
-                            </p>
-                            <p>
-                                <strong>Name:</strong> 
-                                {editingReviewerId === reviewer.id ? (
-                                    <input 
-                                        type="text" 
-                                        value={tempFormData.name} 
-                                        onChange={(e) => handleChange(e, 'name')} 
-                                    />
-                                ) : (
-                                    reviewer.name
-                                )}
-                            </p>
-                            <p>
-                                <strong>Web:</strong> 
-                                {editingReviewerId === reviewer.id ? (
-                                    <input 
-                                        type="text" 
-                                        value={tempFormData.web} 
-                                        onChange={(e) => handleChange(e, 'web')} 
-                                    />
-                                ) : (
-                                    reviewer.web
-                                )}
-                            </p>
-                            <button 
-                                className="small-button" 
-                                onClick={() => window.open(reviewer.web, "_blank")}
-                            >
-                                Visitar web
-                            </button>
-                            <p>
-                                <strong>Channel ID:</strong> 
-                                {editingReviewerId === reviewer.id ? (
-                                    <input 
-                                        type="text" 
-                                        value={tempFormData.channelId} 
-                                        onChange={(e) => handleChange(e, 'channelId')} 
-                                    />
-                                ) : (
-                                    reviewer.channelId
-                                )}
-                            </p>
-
-                            {editingReviewerId === reviewer.id ? (
-                                <>
-                                    <button 
-                                        className="small-button" 
-                                        onClick={extractChannelId}
-                                        disabled={fetchingChannelId}
-                                    >
-                                        {fetchingChannelId ? "Extrayendo..." : "Obtener Channel ID"}
-                                    </button>
-                                    <button className="submit-button" onClick={() => handleUpdate(reviewer.id)}>
-                                        Guardar
-                                    </button>
-                                    <button className="delete-button" onClick={handleCancelEdit}>
-                                        Cancelar
-                                    </button>
-                                </>
-                            ) : (
-                                <>
-                                    <button className="submit-button" onClick={() => handleEdit(reviewer)}>
-                                        Editar
-                                    </button>
-                                    <button className="delete-button" onClick={() => handleDelete(reviewer.id)}>
-                                        Eliminar Reviewer
-                                    </button>
-                                </>
-                            )}
-                        </div>
+                        <ReviewerCard
+                            key={reviewer.id}
+                            reviewer={reviewer}
+                            editingReviewerId={editingReviewerId}
+                            tempFormData={tempFormData}
+                            handleChange={handleChange}
+                            handleLoadVideos={handleLoadVideos}
+                            handleEdit={handleEdit}
+                            handleUpdate={handleUpdate}
+                            handleCancelEdit={handleCancelEdit}
+                            handleDelete={handleDelete}
+                            extractChannelId={extractChannelId}
+                            fetchingChannelId={fetchingChannelId}
+                        />
                     ))}
                 </div>
             )}

@@ -11,6 +11,17 @@ h1 {
     color: #333;
 }
 
+.danger-button {
+    background-color: #ff4444; /* Rojo */
+    color: white;
+    border: none;
+    margin-left: 10px; /* Espacio entre botones */
+}
+
+.danger-button:hover {
+    background-color: #cc0000; /* Rojo oscuro al pasar el ratón */
+}
+
 .create-button {
     background-color: #228b22;
     color: white;
