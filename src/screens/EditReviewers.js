@@ -205,19 +205,16 @@ export default function EditReviewers() {
         }
     };
 
-    const handleLoadVideos = async (channelId, reviewerId, reviewerName) => {
+    const handleLoadVideos = async (channelId, reviewerId, reviewerName, currentPageToken = "") => {
         try {
             if (!channelId) {
                 throw new Error("El Channel ID está vacío.");
             }
     
-            let nextPageToken = "";
-            let allVideos = []; // Almacena todos los videos con sus metadatos
-            
-            // Extraer el ID del video del campo lastVideo (si existe)
+            // Extraer el ID del video del campo lastVideo (si existe y es la primera carga)
             let lastVideoId = "";
-            if (tempFormData.lastVideo) {
-                // Intentar extraer el ID del video del formato "ID (Última carga: fecha)"
+            if (tempFormData.lastVideo && !currentPageToken) {
+                // Solo extraer el ID si es la primera carga (no hay currentPageToken)
                 const match = tempFormData.lastVideo.match(/^([a-zA-Z0-9_-]+)/);
                 if (match) {
                     lastVideoId = match[1];
@@ -227,86 +224,80 @@ export default function EditReviewers() {
                 }
             }
     
-            // Obtener videos en lotes de 10 hasta encontrar el último video cargado
-            let foundLastVideo = false;
-            let lastVideoPublishedAt = null;
+            // Obtener la página actual de videos
+            const { videos, nextPageToken } = await fetchVideosFromChannel(channelId, currentPageToken);
             
-            do {
-                const { videos, nextPageToken: newNextPageToken } = await fetchVideosFromChannel(channelId, nextPageToken);
-                
-                if (lastVideoId && !foundLastVideo) {
-                    // Buscar el video con el ID especificado
-                    const lastVideoIndex = videos.findIndex(video => video.id === lastVideoId);
-                    
-                    if (lastVideoIndex !== -1) {
-                        // Si encontramos el video, guardar su fecha de publicación
-                        lastVideoPublishedAt = new Date(videos[lastVideoIndex].publishedAt);
-                        foundLastVideo = true;
-                        
-                        // Agregar solo los videos más nuevos que el último cargado
-                        const newerVideos = videos.slice(0, lastVideoIndex);
-                        allVideos = [...allVideos, ...newerVideos];
-                        
-                        // Ya encontramos el video de referencia, no necesitamos seguir buscando
-                        break;
-                    } else {
-                        // Si no encontramos el video en esta página, agregar todos y seguir buscando
-                        allVideos = [...allVideos, ...videos];
-                    }
-                } else {
-                    // Si no hay lastVideoId o ya lo encontramos, agregar todos los videos
-                    allVideos = [...allVideos, ...videos];
-                }
-                
-                // Si no hay más páginas, salir del bucle
-                if (!newNextPageToken) {
-                    break;
-                }
-                
-                nextPageToken = newNextPageToken;
-            } while (!foundLastVideo && lastVideoId); // Continuar hasta encontrar el video o hasta que no haya más páginas
-            
-            // Si no estamos buscando un video específico, solo obtener la primera página
-            if (!lastVideoId && allVideos.length === 0) {
-                const { videos } = await fetchVideosFromChannel(channelId, "");
-                allVideos = videos;
+            // Si no hay videos, lanzar un error
+            if (videos.length === 0) {
+                throw new Error("No se encontraron videos para este canal.");
             }
             
-            // Ordenar por fecha de publicación (más reciente primero)
-            allVideos.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
-    
-            if (allVideos.length === 0) {
-                if (lastVideoId && foundLastVideo) {
+            // Si es la primera carga y hay un lastVideoId, buscar su posición
+            let filteredVideos = videos;
+            let foundLastVideo = false;
+            
+            if (lastVideoId && !currentPageToken) {
+                const lastVideoIndex = videos.findIndex(video => video.id === lastVideoId);
+                
+                if (lastVideoIndex !== -1) {
+                    // Si encontramos el video, solo tomar los videos más nuevos
+                    filteredVideos = videos.slice(0, lastVideoIndex);
+                    foundLastVideo = true;
+                }
+            }
+            
+            // Si no hay videos después de filtrar y es la primera carga con un ID específico
+            if (filteredVideos.length === 0 && !currentPageToken && lastVideoId) {
+                if (foundLastVideo) {
                     throw new Error("No se encontraron videos nuevos después del último video verificado.");
-                } else if (lastVideoId) {
-                    throw new Error("No se encontró el video de referencia. Verifica el ID del video.");
-                } else {
-                    throw new Error("No se encontraron videos para este canal.");
                 }
             }
     
             // Extraer solo los IDs para guardar en Firestore
-            const videoIds = allVideos.map(video => video.id);
+            const videoIds = filteredVideos.map(video => video.id);
+            
+            // Si es la primera carga, inicializar window.pendingVideoIds
+            if (!currentPageToken) {
+                window.pendingVideoIds = [];
+            }
+            
+            // Agregar los nuevos IDs a los pendientes
+            window.pendingVideoIds = [...window.pendingVideoIds, ...videoIds];
             
             // Crear el valor para mostrar en la interfaz
-            const newLastVideoId = videoIds[0]; // El primer video es el más reciente
-            const lastVideoDate = new Date().toLocaleString();
-            const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
+            if (window.pendingVideoIds.length > 0) {
+                const newLastVideoId = window.pendingVideoIds[0]; // El primer video es el más reciente
+                const lastVideoDate = new Date().toLocaleString();
+                const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
+                
+                // Actualizar el formulario temporal
+                setTempFormData(prev => ({
+                    ...prev,
+                    lastVideo: lastVideoValue
+                }));
+            }
             
-            // Actualizar el formulario temporal
-            setTempFormData(prev => ({
-                ...prev,
-                lastVideo: lastVideoValue
-            }));
+            // Mostrar mensaje según si hay más páginas o no
+            if (videoIds.length > 0) {
+                if (currentPageToken) {
+                    alert(`${videoIds.length} videos más cargados. Total: ${window.pendingVideoIds.length}. Puede cargar más videos o hacer clic en 'Guardar' para confirmar.`);
+                } else {
+                    alert(`${videoIds.length} videos cargados. Puede cargar más videos o hacer clic en 'Guardar' para confirmar.`);
+                }
+            } else if (!nextPageToken) {
+                alert("Ya no hay más videos disponibles para cargar.");
+            }
             
-            // Guardar los IDs para usarlos cuando se guarde el formulario
-            window.pendingVideoIds = videoIds;
-            
-            alert(`${videoIds.length} videos cargados. Haga clic en 'Guardar' para confirmar o 'Cancelar' para descartar.`);
+            // Devolver información para la paginación
+            return {
+                nextPageToken,
+                videosFound: videoIds.length > 0
+            };
             
         } catch (error) {
             console.error("Error cargando los videos:", error);
             alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
+            return null;
         }
     };
     

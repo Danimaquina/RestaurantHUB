@@ -22,22 +22,46 @@ const ReviewerCard = ({
         documentDeleted: false,
         tempLastVideo: ""
     });
+    
+    // Estado para controlar la carga paginada de videos
+    const [loadingVideos, setLoadingVideos] = useState(false);
+    const [hasMoreVideos, setHasMoreVideos] = useState(true);
+    const [nextPageToken, setNextPageToken] = useState("");
 
     // Función para cargar videos pero guardar el estado pendiente
     const handleLoadVideosPending = async (channelId, reviewerId, reviewerName) => {
         try {
-            // Llamar a la función original para cargar videos
-            await handleLoadVideos(channelId, reviewerId, reviewerName);
+            setLoadingVideos(true);
             
-            // Marcar que hay cambios pendientes
-            setPendingChanges({
-                ...pendingChanges,
-                videosLoaded: true,
-                // Guardar el valor actual de lastVideo para restaurarlo si se cancela
-                tempLastVideo: tempFormData.lastVideo
-            });
+            // Llamar a la función original para cargar videos
+            const result = await handleLoadVideos(channelId, reviewerId, reviewerName, nextPageToken);
+            
+            if (result) {
+                // Si es la primera carga, guardar el valor original
+                if (!nextPageToken) {
+                    setPendingChanges({
+                        ...pendingChanges,
+                        videosLoaded: true,
+                        tempLastVideo: tempFormData.lastVideo
+                    });
+                }
+                
+                // Actualizar el token para la siguiente página
+                setNextPageToken(result.nextPageToken);
+                
+                // Si no hay más token, no hay más videos para cargar
+                if (!result.nextPageToken) {
+                    setHasMoreVideos(false);
+                }
+            } else {
+                // Si hay un error o no hay resultados, no hay más videos
+                setHasMoreVideos(false);
+            }
         } catch (error) {
             console.error("Error cargando los videos:", error);
+            setHasMoreVideos(false);
+        } finally {
+            setLoadingVideos(false);
         }
     };
 
@@ -89,6 +113,10 @@ const ReviewerCard = ({
                 documentDeleted: false,
                 tempLastVideo: ""
             });
+            
+            // Reiniciar el estado de carga paginada
+            setNextPageToken("");
+            setHasMoreVideos(true);
         } catch (error) {
             console.error("Error al actualizar con cambios pendientes:", error);
         }
@@ -108,8 +136,25 @@ const ReviewerCard = ({
             tempLastVideo: ""
         });
         
+        // Reiniciar el estado de carga paginada
+        setNextPageToken("");
+        setHasMoreVideos(true);
+        
         // Llamar a la función original de cancelación
         handleCancelEdit();
+    };
+
+    // Determinar el texto del botón de carga de videos
+    const getLoadButtonText = () => {
+        if (loadingVideos) {
+            return "Cargando...";
+        }
+        
+        if (!nextPageToken) {
+            return "Cargar últimos vídeos";
+        }
+        
+        return "Cargar 10 siguientes";
     };
 
     return (
@@ -137,13 +182,20 @@ const ReviewerCard = ({
                             onChange={(e) => handleChange(e, 'lastVideo')} 
                             placeholder="Introduce ID de video para cargar solo los más nuevos"
                         />
-                       <button 
-                            className="small-button" 
-                            onClick={() => handleLoadVideosPending(tempFormData.channelId, reviewer.id, reviewer.name)}
-                            title="Si has introducido un ID de video, solo se cargarán los videos más nuevos según la fecha de publicación"
-                        >
-                            Cargar últimos vídeos
-                        </button>
+                        {!hasMoreVideos && nextPageToken ? (
+                            <div style={{ color: 'green', marginTop: '5px' }}>Ya no hay más videos</div>
+                        ) : (
+                            <button 
+                                className="small-button" 
+                                onClick={() => handleLoadVideosPending(tempFormData.channelId, reviewer.id, reviewer.name)}
+                                title={!nextPageToken 
+                                    ? "Si el campo está vacío, cargará todos los videos. Si hay un ID, cargará desde ese ID hasta el más nuevo" 
+                                    : "Cargar los siguientes 10 videos"}
+                                disabled={loadingVideos}
+                            >
+                                {getLoadButtonText()}
+                            </button>
+                        )}
 
                         <button 
                             className="small-button danger-button" 
