@@ -236,8 +236,29 @@ export default function EditReviewers() {
                 throw new Error("El Channel ID está vacío.");
             }
     
-            // Cargar todos los videos del canal
-            const allVideos = await fetchAllVideosFromChannel(channelId);
+            const lastVideoId = editingReviewerId ? tempFormData.lastVideo : formData.lastVideo;
+            let allVideos = [];
+    
+            if (lastVideoId) {
+                // Si hay una ID en el campo "Last Video Checked", cargar solo los 10 videos más nuevos después de esa ID
+                const response = await fetch(
+                    `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&publishedAfter=${new Date(lastVideoId).toISOString()}`
+                );
+    
+                if (!response.ok) {
+                    throw new Error("Error al obtener los videos del canal");
+                }
+    
+                const data = await response.json();
+                allVideos = data.items.map(item => ({
+                    id: item.id.videoId,
+                    publishedAt: item.snippet.publishedAt,
+                    title: item.snippet.title
+                }));
+            } else {
+                // Si no hay una ID en el campo "Last Video Checked", cargar todos los videos
+                allVideos = await fetchAllVideosFromChannel(channelId);
+            }
     
             if (allVideos.length === 0) {
                 throw new Error("No se encontraron videos para este canal.");
