@@ -185,3 +185,44 @@ input {
 .close-button:hover {
     background-color: #e53935;
 }
+
+/* Search bar styles */
+.search-container {
+    margin: 20px auto;
+    width: 100%;
+    max-width: 500px;
+    position: relative;
+}
+
+.search-input {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 25px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.search-input:focus {
+    border-color: #3366cc;
+}
+
+.search-icon {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #777;
+}
+
+.search-results {
+    margin-top: 10px;
+    text-align: left;
+}
+
+.no-results {
+    color: #777;
+    font-style: italic;
+    margin-top: 10px;
+}

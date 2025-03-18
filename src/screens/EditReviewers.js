@@ -13,6 +13,9 @@ export default function EditReviewers() {
     const [editingReviewerId, setEditingReviewerId] = useState(null);
     const [tempFormData, setTempFormData] = useState({});
     const [showForm, setShowForm] = useState(false);
+    // Add search state
+    const [searchTerm, setSearchTerm] = useState("");
+    const [filteredReviewers, setFilteredReviewers] = useState([]);
 
     const defaultFormData = {
         avatarUrl: "",
@@ -28,10 +31,31 @@ export default function EditReviewers() {
         fetchReviewers();
     }, []);
 
+    // Add effect to filter reviewers when search term or reviewers list changes
+    useEffect(() => {
+        if (searchTerm.trim() === "") {
+            setFilteredReviewers(reviewers);
+        } else {
+            const filtered = reviewers.filter(reviewer => 
+                reviewer.name.toLowerCase().includes(searchTerm.toLowerCase())
+            );
+            setFilteredReviewers(filtered);
+        }
+        // Reset to first page when search changes
+        setCurrentPage(1);
+    }, [searchTerm, reviewers]);
+
     const fetchReviewers = async () => {
         const querySnapshot = await getDocs(collection(db, "reviewers"));
         const reviewersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setReviewers(reviewersList);
+        // Initialize filtered reviewers with all reviewers
+        setFilteredReviewers(reviewersList);
+    };
+
+    // Add search handler
+    const handleSearch = (e) => {
+        setSearchTerm(e.target.value);
     };
 
     const deleteVideosToEditCollection = async () => {
@@ -152,10 +176,13 @@ export default function EditReviewers() {
         }
     };
 
-    const fetchVideosFromChannel = async (channelId, nextPageToken = "") => {
-        try {
+    const fetchAllVideosFromChannel = async (channelId) => {
+        let allVideos = [];
+        let nextPageToken = "";
+    
+        do {
             const response = await fetch(
-                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&pageToken=${nextPageToken}`
+                `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=50&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&pageToken=${nextPageToken}`
             );
     
             if (!response.ok) {
@@ -163,19 +190,17 @@ export default function EditReviewers() {
             }
     
             const data = await response.json();
-            return {
-                // Devolver los items completos para tener acceso a la fecha de publicación
-                videos: data.items.map(item => ({
-                    id: item.id.videoId,
-                    publishedAt: item.snippet.publishedAt,
-                    title: item.snippet.title
-                })),
-                nextPageToken: data.nextPageToken || null,
-            };
-        } catch (error) {
-            console.error("Error obteniendo los videos:", error);
-            throw error;
-        }
+            const videos = data.items.map(item => ({
+                id: item.id.videoId,
+                publishedAt: item.snippet.publishedAt,
+                title: item.snippet.title
+            }));
+    
+            allVideos = [...allVideos, ...videos];
+            nextPageToken = data.nextPageToken || "";
+        } while (nextPageToken);
+    
+        return allVideos;
     };
 
     const saveVideoIdsToFirestore = async (videoIds, reviewerId, reviewerName) => {
@@ -205,99 +230,42 @@ export default function EditReviewers() {
         }
     };
 
-    const handleLoadVideos = async (channelId, reviewerId, reviewerName, currentPageToken = "") => {
+    const handleLoadVideos = async (channelId, reviewerId, reviewerName) => {
         try {
             if (!channelId) {
                 throw new Error("El Channel ID está vacío.");
             }
     
-            // Extraer el ID del video del campo lastVideo (si existe y es la primera carga)
-            let lastVideoId = "";
-            if (tempFormData.lastVideo && !currentPageToken) {
-                // Solo extraer el ID si es la primera carga (no hay currentPageToken)
-                const match = tempFormData.lastVideo.match(/^([a-zA-Z0-9_-]+)/);
-                if (match) {
-                    lastVideoId = match[1];
-                } else {
-                    // Si no coincide con el formato, usar el valor completo como ID
-                    lastVideoId = tempFormData.lastVideo;
-                }
-            }
+            // Cargar todos los videos del canal
+            const allVideos = await fetchAllVideosFromChannel(channelId);
     
-            // Obtener la página actual de videos
-            const { videos, nextPageToken } = await fetchVideosFromChannel(channelId, currentPageToken);
-            
-            // Si no hay videos, lanzar un error
-            if (videos.length === 0) {
+            if (allVideos.length === 0) {
                 throw new Error("No se encontraron videos para este canal.");
-            }
-            
-            // Si es la primera carga y hay un lastVideoId, buscar su posición
-            let filteredVideos = videos;
-            let foundLastVideo = false;
-            
-            if (lastVideoId && !currentPageToken) {
-                const lastVideoIndex = videos.findIndex(video => video.id === lastVideoId);
-                
-                if (lastVideoIndex !== -1) {
-                    // Si encontramos el video, solo tomar los videos más nuevos
-                    filteredVideos = videos.slice(0, lastVideoIndex);
-                    foundLastVideo = true;
-                }
-            }
-            
-            // Si no hay videos después de filtrar y es la primera carga con un ID específico
-            if (filteredVideos.length === 0 && !currentPageToken && lastVideoId) {
-                if (foundLastVideo) {
-                    throw new Error("No se encontraron videos nuevos después del último video verificado.");
-                }
             }
     
             // Extraer solo los IDs para guardar en Firestore
-            const videoIds = filteredVideos.map(video => video.id);
-            
-            // Si es la primera carga, inicializar window.pendingVideoIds
-            if (!currentPageToken) {
-                window.pendingVideoIds = [];
+            const videoIds = allVideos.map(video => video.id);
+    
+            // Guardar los videos en Firestore
+            const reviewer = reviewers.find(r => r.id === reviewerId);
+            if (reviewer) {
+                await saveVideoIdsToFirestore(videoIds, reviewerId, reviewer.name);
             }
-            
-            // Agregar los nuevos IDs a los pendientes
-            window.pendingVideoIds = [...window.pendingVideoIds, ...videoIds];
-            
-            // Crear el valor para mostrar en la interfaz
-            if (window.pendingVideoIds.length > 0) {
-                const newLastVideoId = window.pendingVideoIds[0]; // El primer video es el más reciente
-                const lastVideoDate = new Date().toLocaleString();
-                const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
-                
-                // Actualizar el formulario temporal
-                setTempFormData(prev => ({
-                    ...prev,
-                    lastVideo: lastVideoValue
-                }));
-            }
-            
-            // Mostrar mensaje según si hay más páginas o no
-            if (videoIds.length > 0) {
-                if (currentPageToken) {
-                    alert(`${videoIds.length} videos más cargados. Total: ${window.pendingVideoIds.length}. Puede cargar más videos o hacer clic en 'Guardar' para confirmar.`);
-                } else {
-                    alert(`${videoIds.length} videos cargados. Puede cargar más videos o hacer clic en 'Guardar' para confirmar.`);
-                }
-            } else if (!nextPageToken) {
-                alert("Ya no hay más videos disponibles para cargar.");
-            }
-            
-            // Devolver información para la paginación
-            return {
-                nextPageToken,
-                videosFound: videoIds.length > 0
-            };
-            
+    
+            // Actualizar el campo "lastVideo" con el video más reciente
+            const newLastVideoId = videoIds[0]; // El primer video es el más reciente
+            const lastVideoDate = new Date().toLocaleString();
+            const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
+    
+            setTempFormData(prev => ({
+                ...prev,
+                lastVideo: lastVideoValue
+            }));
+    
+            alert(`${videoIds.length} videos cargados exitosamente.`);
         } catch (error) {
             console.error("Error cargando los videos:", error);
             alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
-            return null;
         }
     };
     
@@ -324,16 +292,29 @@ export default function EditReviewers() {
         }
     };
 
+    // Update pagination to use filteredReviewers instead of reviewers
     const indexOfLastReviewer = currentPage * reviewersPerPage;
     const indexOfFirstReviewer = indexOfLastReviewer - reviewersPerPage;
-    const currentReviewers = reviewers.slice(indexOfFirstReviewer, indexOfLastReviewer);
+    const currentReviewers = filteredReviewers.slice(indexOfFirstReviewer, indexOfLastReviewer);
 
     return (
         <div className="container">
             <h1>Gestión de Reviewers</h1>
 
-            {reviewers.length === 0 ? (
-                <p>No hay Reviewers</p>
+            {/* Add search bar */}
+            <div className="search-container">
+                <input
+                    type="text"
+                    className="search-input"
+                    placeholder="Buscar reviewer por nombre..."
+                    value={searchTerm}
+                    onChange={handleSearch}
+                />
+                <span className="search-icon">🔍</span>
+            </div>
+
+            {filteredReviewers.length === 0 ? (
+                <p className="no-results">No se encontraron reviewers con ese nombre</p>
             ) : (
                 <div>
                     <div className="pagination">
@@ -343,7 +324,7 @@ export default function EditReviewers() {
                         >
                             ← Previous
                         </button>
-                        {Array.from({ length: Math.ceil(reviewers.length / reviewersPerPage) }, (_, i) => (
+                        {Array.from({ length: Math.ceil(filteredReviewers.length / reviewersPerPage) }, (_, i) => (
                             <button 
                                 key={i} 
                                 className={currentPage === i + 1 ? "active" : ""}
@@ -354,7 +335,7 @@ export default function EditReviewers() {
                         ))}
                         <button 
                             onClick={() => setCurrentPage(currentPage + 1)} 
-                            disabled={currentPage === Math.ceil(reviewers.length / reviewersPerPage)}
+                            disabled={currentPage === Math.ceil(filteredReviewers.length / reviewersPerPage)}
                         >
                             Next →
                         </button>
