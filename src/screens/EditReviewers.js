@@ -230,6 +230,28 @@ export default function EditReviewers() {
         }
     };
 
+    const getVideoPublishDate = async (videoId) => {
+        try {
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKeys.YOUTUBE_API_KEY}`
+            );
+    
+            if (!response.ok) {
+                throw new Error("Error al obtener la fecha de publicación del video");
+            }
+    
+            const data = await response.json();
+            if (data.items && data.items.length > 0) {
+                return data.items[0].snippet.publishedAt; // Retorna la fecha de publicación del video
+            } else {
+                throw new Error("Video no encontrado");
+            }
+        } catch (error) {
+            console.error("Error obteniendo la fecha de publicación del video:", error);
+            throw error;
+        }
+    };
+
     const handleLoadVideos = async (channelId, reviewerId, reviewerName) => {
         try {
             if (!channelId) {
@@ -240,9 +262,12 @@ export default function EditReviewers() {
             let allVideos = [];
     
             if (lastVideoId) {
-                // Si hay una ID en el campo "Last Video Checked", cargar solo los 10 videos más nuevos después de esa ID
+                // Obtener la fecha de publicación del video con la ID proporcionada
+                const publishDate = await getVideoPublishDate(lastVideoId);
+    
+                // Si hay una ID en el campo "Last Video Checked", cargar solo los 10 videos más nuevos después de esa fecha
                 const response = await fetch(
-                    `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&publishedAfter=${new Date(lastVideoId).toISOString()}`
+                    `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=10&order=date&type=video&key=${apiKeys.YOUTUBE_API_KEY}&publishedAfter=${publishDate}`
                 );
     
                 if (!response.ok) {
