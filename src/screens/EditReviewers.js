@@ -57,24 +57,6 @@ export default function EditReviewers() {
         setSearchTerm(e.target.value);
     };
 
-    const deleteVideosToEditCollection = async () => {
-        try {
-            const videosCollectionRef = collection(db, "VideosToEdit");
-            const querySnapshot = await getDocs(videosCollectionRef);
-    
-            const batch = writeBatch(db);
-            querySnapshot.forEach((doc) => {
-                batch.delete(doc.ref); // Añade cada documento al batch para eliminarlo
-            });
-    
-            await batch.commit(); // Ejecuta el batch
-            alert("Colección 'VideosToEdit' eliminada exitosamente");
-        } catch (error) {
-            console.error("Error eliminando la colección 'VideosToEdit':", error);
-            alert("Error eliminando la colección 'VideosToEdit'");
-        }
-    };
-
     const handleCancelEdit = () => {
         // Clear any pending video IDs when canceling
         window.pendingVideoIds = null;
