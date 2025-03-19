@@ -203,6 +203,35 @@ export default function EditReviewers() {
         return allVideos;
     };
 
+    // New function to get additional video details from the YouTube API
+    const getVideoDetails = async (videoId) => {
+        try {
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKeys.YOUTUBE_API_KEY}`
+            );
+    
+            if (!response.ok) {
+                throw new Error("Error al obtener los detalles del video");
+            }
+    
+            const data = await response.json();
+            if (data.items && data.items.length > 0) {
+                const snippet = data.items[0].snippet;
+                return {
+                    description: snippet.description,
+                    thumbnailUrl: snippet.thumbnails?.high?.url || 
+                                 snippet.thumbnails?.medium?.url || 
+                                 snippet.thumbnails?.default?.url || ""
+                };
+            } else {
+                return { description: "", thumbnailUrl: "" };
+            }
+        } catch (error) {
+            console.error("Error obteniendo los detalles del video:", error);
+            return { description: "", thumbnailUrl: "" };
+        }
+    };
+
     const saveVideoIdsToFirestore = async (videos, reviewerId, reviewerName) => {
         try {
             const batch = writeBatch(db); // Usa writeBatch para operaciones en lote
@@ -221,7 +250,8 @@ export default function EditReviewers() {
                     PublishDate: video.publishedAt,
                     Title: video.title,
                     ReviewerID: reviewerId,
-                    Description: videoDetails.description || ""
+                    Description: videoDetails.description || "",
+                    ThumbnailUrl: videoDetails.thumbnailUrl || ""
                 });
             }
     
@@ -241,31 +271,6 @@ export default function EditReviewers() {
         } catch (error) {
             console.error("Error guardando los videos en Firestore:", error);
             throw error;
-        }
-    };
-
-    // New function to get additional video details from the YouTube API
-    const getVideoDetails = async (videoId) => {
-        try {
-            const response = await fetch(
-                `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKeys.YOUTUBE_API_KEY}`
-            );
-    
-            if (!response.ok) {
-                throw new Error("Error al obtener los detalles del video");
-            }
-    
-            const data = await response.json();
-            if (data.items && data.items.length > 0) {
-                return {
-                    description: data.items[0].snippet.description
-                };
-            } else {
-                return { description: "" };
-            }
-        } catch (error) {
-            console.error("Error obteniendo los detalles del video:", error);
-            return { description: "" };
         }
     };
 
