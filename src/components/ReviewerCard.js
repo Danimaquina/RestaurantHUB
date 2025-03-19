@@ -63,16 +63,37 @@ const ReviewerCard = ({
     // Función para borrar el documento específico cuando se guarda
     const deleteReviewerDocument = async () => {
         try {
-            // Referencia al documento específico del reviewer
-            const reviewerDocRef = doc(db, "VideosToEdit", reviewer.name);
+            // Obtener todos los documentos de la colección VideosToEdit
+            const videosCollectionRef = collection(db, "VideosToEdit");
+            const querySnapshot = await getDocs(videosCollectionRef);
             
-            // Eliminar solo ese documento
-            await deleteDoc(reviewerDocRef);
+            // Crear un batch para operaciones en lote
+            const batch = writeBatch(db);
             
-            alert(`Documento '${reviewer.name}' eliminado exitosamente de la colección 'VideosToEdit'`);
+            // Contador para los documentos eliminados
+            let deletedCount = 0;
+            
+            // Recorrer todos los documentos y eliminar los que coincidan con el ReviewerID
+            querySnapshot.forEach((document) => {
+                const videoData = document.data();
+                
+                // Verificar si el ReviewerID coincide con el ID del reviewer actual
+                if (videoData.ReviewerID === reviewer.id) {
+                    batch.delete(document.ref);
+                    deletedCount++;
+                }
+            });
+            
+            // Ejecutar el batch solo si hay documentos para eliminar
+            if (deletedCount > 0) {
+                await batch.commit();
+                alert(`Se han eliminado ${deletedCount} videos asociados al reviewer '${reviewer.name}' de la colección 'VideosToEdit'`);
+            } else {
+                alert(`No se encontraron videos asociados al reviewer '${reviewer.name}' en la colección 'VideosToEdit'`);
+            }
         } catch (error) {
-            console.error(`Error eliminando el documento '${reviewer.name}':`, error);
-            alert(`Error eliminando el documento '${reviewer.name}' de la colección 'VideosToEdit'`);
+            console.error(`Error eliminando los videos del reviewer '${reviewer.name}':`, error);
+            alert(`Error eliminando los videos del reviewer '${reviewer.name}' de la colección 'VideosToEdit'`);
         }
     };
 
@@ -139,7 +160,7 @@ const ReviewerCard = ({
                             type="text" 
                             value={tempFormData.lastVideo} 
                             onChange={(e) => handleChange(e, 'lastVideo')} 
-                            placeholder="Introduce ID de video para cargar solo los más nuevos"
+                            placeholder="Introduce ID del video (Cargara los 10 siguiente) si no hay ID cargara todos los que se encuentre."
                         />
                         <button 
                             className="small-button" 
@@ -153,7 +174,7 @@ const ReviewerCard = ({
                             style={{ backgroundColor: 'red', color: 'white' }}
                             onClick={() => markDocumentForDeletion()}
                         >
-                            Borrar documento
+                            Borrar videos del Reviewer
                         </button>
                     </>
                 ) : (

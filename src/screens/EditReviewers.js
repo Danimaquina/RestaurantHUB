@@ -3,7 +3,7 @@ import { db, addReviewer, updateReviewer } from "../FireBaseConfig";
 import { collection, getDocs, deleteDoc, doc, writeBatch } from "firebase/firestore";
 import "./EditReviewers.css";
 import apiKeys from "../utils/apiKeys";
-import ReviewerCard from "../components/ReviewerCard"; // Importa el nuevo componente
+import ReviewerCard from "../components/ReviewerCard"; 
 
 export default function EditReviewers() {
     const [reviewers, setReviewers] = useState([]);
@@ -13,7 +13,6 @@ export default function EditReviewers() {
     const [editingReviewerId, setEditingReviewerId] = useState(null);
     const [tempFormData, setTempFormData] = useState({});
     const [showForm, setShowForm] = useState(false);
-    // Add search state
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredReviewers, setFilteredReviewers] = useState([]);
 
