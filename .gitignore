@@ -162,4 +162,5 @@ vendor/
 
 src/utils/apiKeys.js
 src/.env*
+src/utils
 
