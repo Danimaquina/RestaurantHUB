@@ -40,6 +40,7 @@ const ReviewerCard = ({
             });
         } catch (error) {
             console.error("Error cargando los videos:", error);
+            alert("Error al cargar los videos: " + error.message);
         } finally {
             setLoadingVideos(false);
         }
@@ -139,6 +140,14 @@ const ReviewerCard = ({
 
     return (
         <div key={reviewer.id} className="reviewer-card">
+            {/* Loading Spinner Popup */}
+            {loadingVideos && (
+                <div className="loading-popup">
+                    <div className="loading-spinner"></div>
+                    <p>Cargando videos...</p>
+                </div>
+            )}
+            
             <img src={reviewer.avatarUrl} alt="Avatar" className="avatar" />
             <p>
                 <strong>URL del Avatar:</strong> 
@@ -167,7 +176,7 @@ const ReviewerCard = ({
                             onClick={() => handleLoadVideosPending(tempFormData.channelId, reviewer.id, reviewer.name)}
                             disabled={loadingVideos}
                         >
-                            {loadingVideos ? "Cargando..." : "Cargar últimos vídeos"}
+                            Cargar últimos vídeos
                         </button>
                         <button 
                             className="small-button danger-button" 
