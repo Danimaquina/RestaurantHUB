@@ -203,19 +203,30 @@ export default function EditReviewers() {
         return allVideos;
     };
 
-    const saveVideoIdsToFirestore = async (videoIds, reviewerId, reviewerName) => {
+    const saveVideoIdsToFirestore = async (videos, reviewerId, reviewerName) => {
         try {
             const batch = writeBatch(db); // Usa writeBatch para operaciones en lote
             const videosCollectionRef = collection(db, "VideosToEdit");
-    
-            // Crear un documento con el nombre del reviewer
-            const reviewerDocRef = doc(videosCollectionRef, reviewerName);
-    
-            // Guardar los videoIds en un campo del documento
-            batch.set(reviewerDocRef, { videoIds });
+            
+            // For each video, create a document with the video ID as the document name
+            for (const video of videos) {
+                // Get additional video details from the API
+                const videoDetails = await getVideoDetails(video.id);
+                
+                // Create a document reference with the video ID as the document name
+                const videoDocRef = doc(videosCollectionRef, video.id);
+                
+                // Set the document data with all required fields
+                batch.set(videoDocRef, {
+                    PublishDate: video.publishedAt,
+                    Title: video.title,
+                    ReviewerID: reviewerId,
+                    Description: videoDetails.description || ""
+                });
+            }
     
             // Actualizar el campo "lastVideo" en el documento del reviewer
-            const lastVideoId = videoIds[0]; // El primer video es el más reciente
+            const lastVideoId = videos[0].id; // El primer video es el más reciente
             const lastVideoDate = new Date().toLocaleString(); // Fecha y hora actual
             const lastVideoValue = `${lastVideoId} (Última carga: ${lastVideoDate})`;
     
@@ -224,9 +235,37 @@ export default function EditReviewers() {
     
             await batch.commit(); // Ejecutar el batch
             alert("Videos guardados exitosamente en Firestore y lastVideo actualizado");
+            
+            // Return the updated lastVideo value for UI updates
+            return { lastVideoValue };
         } catch (error) {
             console.error("Error guardando los videos en Firestore:", error);
             throw error;
+        }
+    };
+
+    // New function to get additional video details from the YouTube API
+    const getVideoDetails = async (videoId) => {
+        try {
+            const response = await fetch(
+                `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${apiKeys.YOUTUBE_API_KEY}`
+            );
+    
+            if (!response.ok) {
+                throw new Error("Error al obtener los detalles del video");
+            }
+    
+            const data = await response.json();
+            if (data.items && data.items.length > 0) {
+                return {
+                    description: data.items[0].snippet.description
+                };
+            } else {
+                return { description: "" };
+            }
+        } catch (error) {
+            console.error("Error obteniendo los detalles del video:", error);
+            return { description: "" };
         }
     };
 
@@ -289,29 +328,29 @@ export default function EditReviewers() {
                 throw new Error("No se encontraron videos para este canal.");
             }
     
-            // Extraer solo los IDs para guardar en Firestore
-            const videoIds = allVideos.map(video => video.id);
-    
             // Guardar los videos en Firestore
             const reviewer = reviewers.find(r => r.id === reviewerId);
             if (reviewer) {
-                await saveVideoIdsToFirestore(videoIds, reviewerId, reviewer.name);
+                // Pass the full video objects instead of just IDs
+                const result = await saveVideoIdsToFirestore(allVideos, reviewerId, reviewer.name);
+                
+                // Update the tempFormData if we're in edit mode
+                if (editingReviewerId === reviewerId && result && result.lastVideoValue) {
+                    setTempFormData(prev => ({
+                        ...prev,
+                        lastVideo: result.lastVideoValue
+                    }));
+                }
             }
     
-            // Actualizar el campo "lastVideo" con el video más reciente
-            const newLastVideoId = videoIds[0]; // El primer video es el más reciente
-            const lastVideoDate = new Date().toLocaleString();
-            const lastVideoValue = `${newLastVideoId} (Última carga: ${lastVideoDate})`;
-    
-            setTempFormData(prev => ({
-                ...prev,
-                lastVideo: lastVideoValue
-            }));
-    
-            alert(`${videoIds.length} videos cargados exitosamente.`);
+            alert(`${allVideos.length} videos cargados exitosamente.`);
+            
+            // Return the result for UI updates in ReviewerCard
+            return { lastVideoValue: allVideos[0].id };
         } catch (error) {
             console.error("Error cargando los videos:", error);
             alert(error.message || "Error cargando los videos. Por favor, inténtalo de nuevo.");
+            return null;
         }
     };
     
