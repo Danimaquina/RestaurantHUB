@@ -265,3 +265,17 @@ input {
         transform: rotate(360deg);
     }
 }
+
+/* Estilo para campos obligatorios */
+.required-field {
+    color: red;
+    margin-left: 5px;
+}
+
+input:required {
+    border: 1px solid #ddd;
+}
+
+input:required:invalid {
+    border-left: 3px solid red;
+}

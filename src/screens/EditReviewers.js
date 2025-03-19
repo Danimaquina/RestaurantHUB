@@ -6,6 +6,7 @@ import apiKeys from "../utils/apiKeys";
 import ReviewerCard from "../components/ReviewerCard"; 
 
 export default function EditReviewers() {
+     // Estado para almacenar la lista de reviewers
     const [reviewers, setReviewers] = useState([]);
     const [currentPage, setCurrentPage] = useState(1);
     const reviewersPerPage = 1;
@@ -15,7 +16,8 @@ export default function EditReviewers() {
     const [showForm, setShowForm] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const [filteredReviewers, setFilteredReviewers] = useState([]);
-
+    
+    // Datos por defecto del formulario
     const defaultFormData = {
         avatarUrl: "",
         lastVideo: "",
@@ -26,11 +28,12 @@ export default function EditReviewers() {
 
     const [formData, setFormData] = useState(defaultFormData);
 
+    // Efecto para obtener la lista de reviewers al cargar el componente
     useEffect(() => {
         fetchReviewers();
     }, []);
 
-    // Add effect to filter reviewers when search term or reviewers list changes
+    // Filtra los reviewers cuando cambia el término de búsqueda o la lista de reviewers
     useEffect(() => {
         if (searchTerm.trim() === "") {
             setFilteredReviewers(reviewers);
@@ -40,10 +43,11 @@ export default function EditReviewers() {
             );
             setFilteredReviewers(filtered);
         }
-        // Reset to first page when search changes
+        // Reinicia a la primera página cuando se realiza una búsqueda
         setCurrentPage(1);
     }, [searchTerm, reviewers]);
 
+    // Obtiene la lista de reviewers desde Firestore
     const fetchReviewers = async () => {
         const querySnapshot = await getDocs(collection(db, "reviewers"));
         const reviewersList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -52,23 +56,25 @@ export default function EditReviewers() {
         setFilteredReviewers(reviewersList);
     };
 
-    // Add search handler
+    // Maneja la búsqueda
     const handleSearch = (e) => {
         setSearchTerm(e.target.value);
     };
 
+    // Cancela la edición del reviewer actual
     const handleCancelEdit = () => {
-        // Clear any pending video IDs when canceling
         window.pendingVideoIds = null;
         setEditingReviewerId(null);
         setTempFormData({});
     };
 
+    // Alterna la visibilidad del formulario
     const toggleForm = () => {
         setShowForm(!showForm);
         setFormData(defaultFormData);
     };
 
+    // Maneja cambios en los campos del formulario
     const handleChange = (e, field) => {
         if (editingReviewerId) {
             setTempFormData({ ...tempFormData, [field]: e.target.value });
@@ -77,8 +83,20 @@ export default function EditReviewers() {
         }
     };
 
+    // Envía el formulario para agregar un nuevo reviewer
     const handleSubmit = async () => {
         try {
+            // Validar que los campos obligatorios estén completos
+            if (!formData.name.trim()) {
+                alert("El campo 'Name' es obligatorio");
+                return;
+            }
+            
+            if (!formData.web.trim()) {
+                alert("El campo 'Web' es obligatorio");
+                return;
+            }
+            
             await addReviewer(formData);
             alert("Reviewer creado exitosamente");
             setFormData(defaultFormData);
@@ -89,6 +107,7 @@ export default function EditReviewers() {
         }
     };
 
+    // Elimina un reviewer
     const handleDelete = async (id) => {
         try {
             await deleteDoc(doc(db, "reviewers", id));
@@ -99,6 +118,7 @@ export default function EditReviewers() {
         }
     };
 
+    // Activa el modo edición con los datos del reviewer seleccionado
     const handleEdit = (reviewer) => {
         setEditingReviewerId(reviewer.id);
         setTempFormData({
@@ -110,6 +130,7 @@ export default function EditReviewers() {
         });
     };
 
+    // Extrae el ID del canal de YouTube desde la URL
     const extractChannelId = async () => {
         setFetchingChannelId(true);
         try {
@@ -184,7 +205,7 @@ export default function EditReviewers() {
         return allVideos;
     };
 
-    // New function to get additional video details from the YouTube API
+    // Función para obtener los detalles de un video
     const getVideoDetails = async (videoId) => {
         try {
             const response = await fetch(
@@ -213,6 +234,7 @@ export default function EditReviewers() {
         }
     };
 
+    // Nueva función para guardar los IDs de los videos en Firestore
     const saveVideoIdsToFirestore = async (videos, reviewerId, reviewerName) => {
         try {
             const batch = writeBatch(db); // Usa writeBatch para operaciones en lote
@@ -255,6 +277,7 @@ export default function EditReviewers() {
         }
     };
 
+    // Función para obtener la fecha de publicación de un video
     const getVideoPublishDate = async (videoId) => {
         try {
             const response = await fetch(
@@ -277,6 +300,7 @@ export default function EditReviewers() {
         }
     };
 
+    // Función para cargar todos los videos desde un canal y guardarlos en Firestore
     const handleLoadVideos = async (channelId, reviewerId, reviewerName) => {
         try {
             if (!channelId) {
@@ -454,31 +478,33 @@ export default function EditReviewers() {
                             <input 
                                 type="text" 
                                 name="lastVideo" 
-                                value={tempFormData.lastVideo} 
+                                value={formData.lastVideo} 
                                 onChange={(e) => handleChange(e, 'lastVideo')} 
                                 placeholder="Video ID"
                             />
                         </label>
 
                         <label>
-                            Name:
+                            Name: <span className="required-field">*</span>
                             <input 
                                 type="text" 
                                 name="name" 
                                 value={formData.name} 
                                 onChange={(e) => handleChange(e, 'name')} 
                                 placeholder="Reviewer Name"
+                                required
                             />
                         </label>
 
                         <label>
-                            Web:
+                            Web: <span className="required-field">*</span>
                             <input 
                                 type="text" 
                                 name="web" 
                                 value={formData.web} 
                                 onChange={(e) => handleChange(e, 'web')} 
                                 placeholder="https://..."
+                                required
                             />
                         </label>
 
