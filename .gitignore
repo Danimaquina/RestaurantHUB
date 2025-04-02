@@ -164,4 +164,5 @@ src/utils/apiKeys.js
 src/.env*
 src/utils
 src/_pycache_
+src/components/restauranthub-52c3a-firebase-adminsdk-fbsvc-b082fdd793.json
 

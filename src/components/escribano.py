@@ -1,11 +1,20 @@
 import time
-from firebase_admin import firestore
+import firebase_admin
+from firebase_admin import credentials, firestore
 import sys
 import os
 
+# Ruta a tu archivo JSON descargado desde Firebase
+cred = credentials.Certificate("restauranthub-52c3a-firebase-adminsdk-fbsvc-b082fdd792.json")
+
+# Inicializar la app de Firebase
+firebase_admin.initialize_app(cred)
+
+# Conectar con Firestore
+db = firestore.client()
+
 # Añadir la ruta del directorio padre al path para poder importar firebase_config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from firebase_config import db
 
 # Importar correctamente la API de YouTube Transcript
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -22,19 +31,34 @@ def obtener_subtitulos(video_id):
 
 def procesar_documento(doc_id):
     """Procesa un documento de Firebase y le agrega subtítulos."""
-    # Cambiar "videos" por "VideosToEdit"
     doc_ref = db.collection("VideosToEdit").document(doc_id)
     doc = doc_ref.get()
 
     if doc.exists:
-        print(f"🔍 Procesando video: {doc_id}")
-        subtitulos = obtener_subtitulos(doc_id)
+        data = doc.to_dict()
+        if not data.get("Transcription"):  # Verifica si el campo 'Transcription' está vacío
+            print(f"🔍 Procesando video: {doc_id}")
+            subtitulos = obtener_subtitulos(doc_id)
 
-        if subtitulos:
-            doc_ref.update({"subtitulos": subtitulos})
-            print(f"✅ Subtítulos guardados en {doc_id}")
+            if subtitulos:
+                doc_ref.update({"Transcription": subtitulos})
+                print(f"✅ Subtítulos guardados en {doc_id}")
+            else:
+                print(f"⚠️ No se encontraron subtítulos para {doc_id}")
         else:
-            print(f"⚠️ No se encontraron subtítulos para {doc_id}")
+            print(f"📄 El documento {doc_id} ya tiene una transcripción.")
+
+def procesar_nuevo_video(video_id):
+    """Función que se llama desde React para procesar un nuevo video."""
+    procesar_documento(video_id)
+
+def procesar_todos_los_videos():
+    """Recorre todos los documentos en la colección y procesa aquellos sin transcripción."""
+    videos_ref = db.collection("VideosToEdit")
+    docs = videos_ref.stream()
+
+    for doc in docs:
+        procesar_documento(doc.id)
 
 def listener(col_snapshot, changes, read_time):
     """Escucha cambios en la colección de videos."""
@@ -45,7 +69,10 @@ def listener(col_snapshot, changes, read_time):
 def main():
     print("👀 Escuchando nuevos videos en Firebase...")
 
-    # Cambiar "videos" por "VideosToEdit"
+    # Procesar todos los videos existentes al iniciar
+    procesar_todos_los_videos()
+
+    # Escuchar cambios en la colección
     videos_ref = db.collection("VideosToEdit")
     watch = videos_ref.on_snapshot(listener)
 

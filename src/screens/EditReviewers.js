@@ -254,7 +254,9 @@ export default function EditReviewers() {
                     Title: video.title,
                     ReviewerID: reviewerId,
                     Description: videoDetails.description || "",
-                    ThumbnailUrl: videoDetails.thumbnailUrl || ""
+                    ThumbnailUrl: videoDetails.thumbnailUrl || "",
+                    Transcription: "", // Nuevo campo para almacenar la transcripción
+                    Review: []
                 });
             }
     
