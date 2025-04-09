@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { db } from "../FireBaseConfig";
 import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
 import VideoCard from "../components/VideoCard";
+import ReviewCard from "../components/ReviewCard";
 import "./EditVideos.css";
 
 export default function EditVideos() {
@@ -122,11 +123,17 @@ export default function EditVideos() {
           {/* Lista de videos */}
           <div className="videos-list">
             {currentVideos.map(video => (
-              <VideoCard
-                key={video.id}
-                video={video}
-                reviewerName={reviewers[video.ReviewerID]}
-              />
+              <div key={video.id} className="video-container">
+                <VideoCard
+                  video={video}
+                  reviewerName={reviewers[video.ReviewerID]}
+                />
+                <ReviewCard 
+                  video={video} 
+                  reviewerName={reviewers[video.ReviewerID]}
+                  alwaysOpen={true} 
+                />
+              </div>
             ))}
           </div>
         </div>
