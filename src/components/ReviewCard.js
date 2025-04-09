@@ -24,6 +24,8 @@ const ReviewCard = ({ video, reviewerName }) => {
     status: ""
   });
 
+  const [searchResults, setSearchResults] = useState([]); 
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -46,6 +48,23 @@ const ReviewCard = ({ video, reviewerName }) => {
   const handleUpdateMap = () => {
     console.log("Updating map with coordinates:", formData.latitude, formData.longitude);
     // Here you would add the logic to update the map with the given coordinates
+  };
+
+  const handleSearch = async () => {
+    try {
+      const results = await searchPlaces(formData.search); // Usa tu función
+      setSearchResults(results); // Guarda los resultados
+    } catch (error) {
+      console.error(error.message);
+    }
+  };
+
+  const handleSelectPlace = (e) => {
+    const selectedPlaceName = e.target.value;
+    setFormData({
+      ...formData,
+      name: selectedPlaceName
+    });
   };
 
   return (
@@ -79,18 +98,31 @@ const ReviewCard = ({ video, reviewerName }) => {
             </div>
 
             <div className="form-group">
-              <label htmlFor="name">Buscar restaurante:</label>
-              <input 
-                type="text" 
-                id="search" 
-                name="search" 
-                value={formData.search}
-                onChange={handleChange}
-              />
+            <label htmlFor="search">Buscar restaurante:</label>
+            <input 
+              type="text" 
+              id="search" 
+              name="search" 
+              value={formData.search}
+              onChange={handleChange}
+            />
+            <div className="button-container">
+              <button type="button" className="action-btn" onClick={handleSearch}>Buscar</button>
             </div>
+          </div>
 
-             <div className="form-group">
-              <label htmlFor="name">Nombre del restaurante:</label>
+          <div className="form-group">
+            <label htmlFor="name">Nombre del restaurante:</label>
+            {searchResults.length > 0 ? (
+              <select id="name" name="name" value={formData.name} onChange={handleSelectPlace}>
+                <option value="">Selecciona un restaurante</option>
+                {searchResults.map((place) => (
+                  <option key={place.id} value={place.displayName.text}>
+                    {place.displayName.text}
+                  </option>
+                ))}
+              </select>
+            ) : (
               <input 
                 type="text" 
                 id="name" 
@@ -98,7 +130,8 @@ const ReviewCard = ({ video, reviewerName }) => {
                 value={formData.name}
                 onChange={handleChange}
               />
-            </div>
+            )}
+          </div>
             
             <div className="form-group">
               <label htmlFor="googlePlaceId">Google Place ID:</label>
