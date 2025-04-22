@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./ReviewCard.css";
 import apiKeys from "../utils/apiKeys";
 import {searchPlaces, getPlaceDetails} from "../googlePlacesService";
+import MiniMap from "../components/MiniMap";
 
 
 const ReviewCard = ({ video, reviewerName }) => {
@@ -40,14 +41,18 @@ const ReviewCard = ({ video, reviewerName }) => {
     // Here you would add the logic to save the data to Firebase
   };
 
+  const handleVisitLink = (url) => {
+    if (!url || url === "INEXISTENTE") {
+      alert("No hay enlace disponible.");
+      return;
+    }
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+  
+
   const handleAddRestaurant = () => {
     console.log("Adding another restaurant");
     // Logic to add another restaurant form would go here
-  };
-
-  const handleUpdateMap = () => {
-    console.log("Updating map with coordinates:", formData.latitude, formData.longitude);
-    // Here you would add the logic to update the map with the given coordinates
   };
 
   const handleSearch = async () => {
@@ -59,12 +64,41 @@ const ReviewCard = ({ video, reviewerName }) => {
     }
   };
 
-  const handleSelectPlace = (e) => {
+  const handleSelectPlace = async (e) => {
     const selectedPlaceName = e.target.value;
-    setFormData({
-      ...formData,
-      name: selectedPlaceName
-    });
+    const selectedPlace = searchResults.find(place => place.displayName.text === selectedPlaceName);
+  
+    if (selectedPlace) {
+      try {
+        //Campos básicos (nombre, ID, dirección)
+        setFormData({
+          ...formData,
+          name: selectedPlaceName,
+          googlePlaceId: selectedPlace.id,
+          address: selectedPlace.formattedAddress
+        });
+  
+        //Obtenemos los detalles completos
+        const details = await getPlaceDetails(selectedPlace.id);
+        console.log("Datos de la API:", details); 
+  
+        setFormData(prev => ({
+          ...prev,
+          phone: details.internationalPhoneNumber || "", 
+          googleMapsLink: details.googleMapsUri || "", 
+          website: details.websiteUri?.trim() !== "" ? details.websiteUri : "INEXISTENTE",
+          rating: details.rating?.toString() || "", 
+          reviewCount: details.userRatingCount?.toString() || "", 
+          priceLevel: details.priceLevel ? details.priceLevel.replace("PRICE_LEVEL_", "") : "",
+          latitude: details.location?.latitude?.toString() || "",
+          longitude: details.location?.longitude?.toString() || "",
+          status: details.businessStatus || "" 
+        }));
+  
+      } catch (error) {
+        console.error("Error al cargar detalles:", error);
+      }
+    }
   };
 
   return (
@@ -177,7 +211,13 @@ const ReviewCard = ({ video, reviewerName }) => {
                 onChange={handleChange}
               />
               <div className="button-container">
-                <button type="button" className="action-btn">Visitar web →</button>
+                <button 
+                  type="button" 
+                  className="action-btn"
+                  onClick={() => handleVisitLink(formData.website)}
+                >
+                  Visitar web →
+                </button>
               </div>
             </div>
             
@@ -191,7 +231,13 @@ const ReviewCard = ({ video, reviewerName }) => {
                 onChange={handleChange}
               />
               <div className="button-container">
-                <button type="button" className="action-btn">Visitar web →</button>
+                <button 
+                  type="button" 
+                  className="action-btn"
+                  onClick={() => handleVisitLink(formData.tripAdvisorLink)}
+                >
+                  Visitar web →
+                </button>
               </div>
             </div>
             
@@ -205,7 +251,13 @@ const ReviewCard = ({ video, reviewerName }) => {
                 onChange={handleChange}
               />
               <div className="button-container">
-                <button type="button" className="action-btn">Visitar web →</button>
+                <button 
+                  type="button" 
+                  className="action-btn"
+                  onClick={() => handleVisitLink(formData.googleMapsLink)}
+                >
+                  Visitar web →
+                </button>
               </div>
             </div>
             
@@ -270,26 +322,13 @@ const ReviewCard = ({ video, reviewerName }) => {
                   placeholder="Ej: 2.1734"
                 />
               </div>
-              <div className="update-map-btn-container">
-                <button 
-                  type="button" 
-                  className="action-btn update-map-btn"
-                  onClick={handleUpdateMap}
-                >
-                  Actualizar Mapa
-                </button>
-              </div>
+          
             </div>
             
             <div className="form-group">
               <label>Mapa:</label>
               <div className="map-container">
-                {/* Map would be displayed here */}
-                <img 
-                  src={`https://maps.googleapis.com/maps/api/staticmap?center=${formData.latitude || "41.3851"},${formData.longitude || "2.1734"}&zoom=15&size=600x300&maptype=roadmap&markers=color:red%7C${formData.latitude || "41.3851"},${formData.longitude || "2.1734"}&key=YOUR_API_KEY`} 
-                  alt="Map" 
-                  className="map-preview" 
-                />
+                <MiniMap lat={formData.latitude} lng={formData.longitude} />
               </div>
             </div>
             
