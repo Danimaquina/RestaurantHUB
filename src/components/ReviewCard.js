@@ -4,7 +4,8 @@ import apiKeys from "../utils/apiKeys";
 import {searchPlaces, getPlaceDetails} from "../googlePlacesService";
 import MiniMap from "../components/MiniMap";
 import { db } from "../FireBaseConfig";
-import { collection, getDocs, query, where, doc, getDoc, updateDoc} from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc, updateDoc, setDoc, deleteDoc} from "firebase/firestore";
+
 
 const ReviewCard = ({ video, reviewerName }) => {
   const [reviews, setReviews] = useState([]); // Estado inicial vacío

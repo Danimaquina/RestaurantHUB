@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../FireBaseConfig";
-import { collection, getDocs, query, where, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, doc, getDoc, setDoc, deleteDoc, arrayUnion, updateDoc} from "firebase/firestore";
 import VideoCard from "../components/VideoCard";
 import ReviewCard from "../components/ReviewCard";
 import "./EditVideos.css";
@@ -68,6 +68,93 @@ export default function EditVideos() {
     setSearchTerm(e.target.value);
   };
 
+  
+
+  const handlePublishReviews = async (videoId) => {
+    if (!window.confirm("¿Estás seguro que quieres publicar todas las reviews de este video? Esta acción no se puede deshacer.")) {
+      return;
+    }
+  
+    try {
+      // Obtener el video específico
+      const video = videos.find(v => v.id === videoId);
+      if (!video) {
+        alert("Video no encontrado");
+        return;
+      }
+  
+      // Verificar que hay reviews para publicar
+      if (!video.Review || video.Review.length === 0) {
+        alert("No hay reviews para publicar en este video");
+        return;
+      }
+  
+      // Procesar cada review del video
+      for (const review of video.Review) {
+        // 1. Crear/actualizar documento en Restaurants
+        const restaurantRef = doc(db, "Restaurants", review.googlePlaceId);
+        const restaurantDoc = await getDoc(restaurantRef);
+  
+        const reviewData = {
+          videoId: video.id,
+          startTime: review.startTime,
+          publishDate: new Date()
+        };
+  
+        if (restaurantDoc.exists()) {
+          // Actualizar restaurante existente
+          await updateDoc(restaurantRef, {
+            reviews: arrayUnion(reviewData),
+            lastUpdated: new Date()
+          });
+        } else {
+          // Crear nuevo restaurante
+          await setDoc(restaurantRef, {
+            googlePlaceId: review.googlePlaceId,
+            name: review.name,
+            address: review.address,
+            phone: review.phone,
+            website: review.website,
+            tripAdvisorLink: review.tripAdvisorLink,
+            googleMapsLink: review.googleMapsLink,
+            rating: review.rating,
+            reviewCount: review.reviewCount,
+            priceLevel: review.priceLevel,
+            latitude: review.latitude,
+            longitude: review.longitude,
+            image: review.image,
+            status: review.status,
+            reviews: [reviewData],
+            createdAt: new Date()
+          });
+        }
+      }
+
+      // Crear un solo documento en Reviews por video
+      const reviewDocRef = doc(db, "Reviews", video.id);
+      await setDoc(reviewDocRef, {
+        videoId: video.id,
+        reviewerId: video.ReviewerID,
+        title: video.Title,
+        publishDate: new Date(),
+      });
+  
+      // 3. Eliminar el video de VideosToEdit
+      const videoRef = doc(db, "VideosToEdit", video.id);
+      await deleteDoc(videoRef);
+  
+      alert("Todas las reviews han sido publicadas correctamente!");
+      
+      // Actualizar la lista de videos
+      setVideos(prev => prev.filter(v => v.id !== videoId));
+      setFilteredVideos(prev => prev.filter(v => v.id !== videoId));
+      
+    } catch (error) {
+      console.error("Error al publicar reviews:", error);
+      alert("Error al publicar: " + error.message);
+    }
+  };
+
   // Cálculo para la paginación
   const indexOfLastVideo = currentPage * videosPerPage;
   const indexOfFirstVideo = indexOfLastVideo - videosPerPage;
@@ -120,7 +207,6 @@ export default function EditVideos() {
             </button>
           </div>
 
-          {/* Lista de videos */}
           <div className="videos-list">
             {currentVideos.map(video => (
               <div key={video.id} className="video-container">
@@ -133,6 +219,12 @@ export default function EditVideos() {
                   reviewerName={reviewers[video.ReviewerID]}
                   alwaysOpen={true} 
                 />
+                <button 
+                  className="publish-btn"
+                  onClick={() => handlePublishReviews(video.id)}
+                >
+                  Volcar Infomarcion
+                </button>
               </div>
             ))}
           </div>
