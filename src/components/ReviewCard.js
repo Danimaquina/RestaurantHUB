@@ -1,36 +1,72 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./ReviewCard.css";
 import apiKeys from "../utils/apiKeys";
 import {searchPlaces, getPlaceDetails} from "../googlePlacesService";
 import MiniMap from "../components/MiniMap";
+import { db } from "../FireBaseConfig";
+import { collection, getDocs, query, where, doc, getDoc, updateDoc} from "firebase/firestore";
 
 const ReviewCard = ({ video, reviewerName }) => {
-  const [reviews, setReviews] = useState([
-    {
-      id: 1,
-      startTime: "",
-      googlePlaceId: "",
-      search: "",
-      name: "",
-      address: "",
-      phone: "",
-      website: "",
-      tripAdvisorLink: "",
-      googleMapsLink: "",
-      rating: "",
-      reviewCount: "",
-      priceLevel: "",
-      latitude: "",
-      longitude: "",
-      image: "",
-      status: ""
-    }
-  ]);
-  
+  const [reviews, setReviews] = useState([]); // Estado inicial vacío
   const [activeReviewId, setActiveReviewId] = useState(1);
   const [searchResults, setSearchResults] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const activeReview = reviews.find(review => review.id === activeReviewId) || reviews[0];
+  // Función auxiliar para crear reviews vacías
+  const createEmptyReview = (id) => ({
+    id,
+    startTime: "",
+    googlePlaceId: "",
+    search: "",
+    name: "",
+    address: "",
+    phone: "",
+    website: "",
+    tripAdvisorLink: "",
+    googleMapsLink: "",
+    rating: "",
+    reviewCount: "",
+    priceLevel: "",
+    latitude: "",
+    longitude: "",
+    image: "",
+    status: ""
+  });
+
+  // Efecto para cargar las reviews al montar el componente
+  useEffect(() => {
+    const loadReviews = async () => {
+      try {
+        const videoDocRef = doc(db, "VideosToEdit", video.id);
+        const videoDoc = await getDoc(videoDocRef);
+        
+        if (videoDoc.exists()) {
+          const firebaseReviews = videoDoc.data()?.Review || [];
+          
+          if (firebaseReviews.length > 0) {
+            // Si hay reviews en Firebase, las usamos
+            setReviews(firebaseReviews);
+            setActiveReviewId(firebaseReviews[0].id);
+          } else {
+            // Si no hay reviews, creamos una por defecto
+            setReviews([createEmptyReview(1)]);
+          }
+        } else {
+          // Si el documento no existe, creamos una review por defecto
+          setReviews([createEmptyReview(1)]);
+        }
+      } catch (error) {
+        console.error("Error cargando reviews:", error);
+        setReviews([createEmptyReview(1)]); // Fallback
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadReviews();
+  }, [video.id]);
+
+  const activeReview = reviews.find(review => review.id === activeReviewId) || (reviews.length > 0 ? reviews[0] : createEmptyReview(1));
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -39,11 +75,96 @@ const ReviewCard = ({ video, reviewerName }) => {
     ));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e, reviewId) => {
     e.preventDefault();
-    console.log("Reviews to save:", reviews);
-    // Guardar todas las reviews en Firebase
-    // Cada review tendrá su campo 'id' con el número correspondiente
+    
+    const reviewToSave = reviews.find(review => review.id === reviewId);
+    
+    if (!reviewToSave) {
+      alert('No se encontró la review para guardar');
+      return;
+    }
+  
+    // Validación de campos obligatorios
+    const requiredFields = ['search', 'name', 'googlePlaceId', 'address'];
+    const hasErrors = requiredFields.some(field => !reviewToSave[field] || reviewToSave[field].trim() === '');
+  
+    if (hasErrors) {
+      alert('Por favor completa todos los campos obligatorios (Buscar restaurante, Nombre del restaurante, Google ID y Dirección) para esta review.');
+      return;
+    }
+  
+    try {
+      const videoDocRef = doc(db, "VideosToEdit", video.id);
+      const videoDoc = await getDoc(videoDocRef);
+      const currentReviews = videoDoc.data()?.Review || [];
+      
+      // Limpiamos los valores undefined reemplazándolos por string vacío
+      const cleanReview = {
+        id: reviewToSave.id,
+        startTime: reviewToSave.startTime || "",
+        googlePlaceId: reviewToSave.googlePlaceId || "",
+        search: reviewToSave.search || "",
+        name: reviewToSave.name || "",
+        address: reviewToSave.address || "",
+        phone: reviewToSave.phone || "",
+        website: reviewToSave.website || "",
+        tripAdvisorLink: reviewToSave.tripAdvisorLink || "",
+        googleMapsLink: reviewToSave.googleMapsLink || "",
+        rating: reviewToSave.rating || "",
+        reviewCount: reviewToSave.reviewCount || "",
+        priceLevel: reviewToSave.priceLevel || "",
+        latitude: reviewToSave.latitude || "",
+        longitude: reviewToSave.longitude || "",
+        image: reviewToSave.image || "",
+        status: reviewToSave.status || ""
+      };
+      
+      const updatedReviews = currentReviews.filter(r => r.id !== reviewId);
+      updatedReviews.push(cleanReview);
+      
+      await updateDoc(videoDocRef, {
+        Review: updatedReviews
+      });
+      
+      alert(`Review ${reviewId} del video: (${video.Title}) guardada correctamente!`);
+    } catch (error) {
+      console.error("Error al guardar:", error);
+      alert('Error al guardar: ' + error.message);
+    }
+  };
+
+  const handleDeleteReview = async (reviewId) => {
+    if (!window.confirm(`¿Estás seguro que quieres eliminar la Review ${reviewId} del video: (${video.Title})?`)) {
+      return;
+    }
+  
+    try {
+      const videoDocRef = doc(db, "VideosToEdit", video.id);
+      const videoDoc = await getDoc(videoDocRef);
+      const currentReviews = videoDoc.data()?.Review || [];
+      
+      // Filtrar para quitar la review específica
+      const updatedReviews = currentReviews.filter(r => r.id !== reviewId);
+      
+      await updateDoc(videoDocRef, {
+        Review: updatedReviews
+      });
+      
+      // Actualizar el estado local
+      setReviews(prevReviews => prevReviews.filter(r => r.id !== reviewId));
+      
+      // Cambiar a otra review si estamos eliminando la activa
+      if (activeReviewId === reviewId) {
+        const remainingReviews = reviews.filter(r => r.id !== reviewId);
+        setActiveReviewId(remainingReviews.length > 0 ? remainingReviews[0].id : 1);
+      }
+      
+      alert(`Review ${reviewId} eliminada correctamente!`);
+    } catch (error) {
+      console.error("Error al eliminar:", error);
+      alert('Error al eliminar: ' + error.message);
+    }
   };
 
   const handleVisitLink = (url) => {
@@ -56,28 +177,7 @@ const ReviewCard = ({ video, reviewerName }) => {
   
   const handleAddRestaurant = () => {
     const newId = reviews.length > 0 ? Math.max(...reviews.map(r => r.id)) + 1 : 1;
-    setReviews([
-      ...reviews,
-      {
-        id: newId,
-        startTime: "",
-        googlePlaceId: "",
-        search: "",
-        name: "",
-        address: "",
-        phone: "",
-        website: "",
-        tripAdvisorLink: "",
-        googleMapsLink: "",
-        rating: "",
-        reviewCount: "",
-        priceLevel: "",
-        latitude: "",
-        longitude: "",
-        image: "",
-        status: ""
-      }
-    ]);
+    setReviews([...reviews, createEmptyReview(newId)]);
     setActiveReviewId(newId);
   };
 
@@ -134,6 +234,10 @@ const ReviewCard = ({ video, reviewerName }) => {
       }
     }
   };
+
+  if (loading) {
+    return <div className="loading">Cargando reviews...</div>;
+  }
 
   return (
     <div className="review-card">
@@ -402,12 +506,21 @@ const ReviewCard = ({ video, reviewerName }) => {
           
           <div className="form-actions">
             <button 
-              type="submit" 
+              type="button"
               className="submit-btn"
+              onClick={(e) => handleSubmit(e, activeReviewId)}
             >
-              Guardar
+              Guardar Review {activeReviewId}
             </button>
-          </div>
+            
+            <button 
+              type="button"
+              className="delete-btn"
+              onClick={() => handleDeleteReview(activeReviewId)}
+            >
+              Eliminar Review {activeReviewId}
+            </button>
+        </div>
         </form>
       </div>
     </div>
