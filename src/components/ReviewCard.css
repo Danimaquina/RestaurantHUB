@@ -13,6 +13,11 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
+.tab.has-name {
+  font-weight: bold;
+  color: #2c3e50;
+}
+
 .restaurant-form-header {
   background-color: #edf2f7;
   padding: 16px 20px;
@@ -35,19 +40,34 @@
 /* Form tabs styling */
 .form-tabs {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #e2e8f0;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 15px;
 }
 
 .tab {
-  padding: 10px 20px;
+  padding: 8px 15px;
+  background-color: #e5e7eb;
   border-radius: 4px;
-  background-color: #f1f5f9;
-  color: #3b82f6;
-  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab.active {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.tab:hover {
+  background-color: #d1d5db;
+}
+
+.tab.active:hover {
+  background-color: #2563eb;
 }
 
 .add-restaurant-btn {
