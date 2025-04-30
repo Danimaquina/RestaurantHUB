@@ -1,0 +1,237 @@
+/* RestaurantCard.css */
+.restaurant-card {
+    background-color: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    margin: 20px 0;
+    overflow: hidden;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .restaurant-header {
+    background: #4a90e2;
+    color: white;
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .restaurant-header h2 {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 600;
+    line-height: 1.2;
+  }
+  
+  .rating-badge {
+    background-color: #f59e0b;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 1rem;
+  }
+  
+  .restaurant-content {
+    padding: 25px;
+  }
+  
+  .info-section, 
+  .map-section, 
+  .links-section, 
+  .image-section {
+    margin-bottom: 30px;
+  }
+  
+  .info-section h3, 
+  .map-section h3, 
+  .links-section h3, 
+  .image-section h3 {
+    color: #1e293b;
+    border-bottom: 2px solid #e2e8f0;
+    padding-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 20px;
+    font-size: 1.3rem;
+  }
+  
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 16px;
+  }
+  
+  .info-row {
+    display: flex;
+    margin-bottom: 10px;
+    align-items: baseline;
+  }
+  
+  .info-label {
+    font-weight: 600;
+    color: #334155;
+    margin-right: 12px;
+    min-width: 140px;
+    font-size: 0.95rem;
+    font-weight: bold;
+
+  }
+  
+  .info-value {
+    color: #475569;
+    word-break: break-word;
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  
+  .map-container {
+    height: 250px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+  }
+  
+  .coordinates {
+    display: flex;
+    gap: 20px;
+    color: #64748b;
+    font-size: 0.9rem;
+    justify-content: center;
+  }
+  
+  .links-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center; 
+  }
+  
+  .link-button {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  
+  .link-button:hover {
+    background: #1d4ed8 100%;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(37, 99, 235, 0.2);
+  }
+  
+  .image-section {
+    text-align: center;
+  }
+  
+  .image-container {
+    max-width: 400px;
+    margin: 0 auto 15px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
+  }
+  
+  .image-container img {
+    width: 100%;
+    height: auto;
+    max-height: 250px;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.3s ease;
+  }
+  
+  .image-container:hover img {
+    transform: scale(1.03);
+  }
+  
+  
+  @media (max-width: 768px) {
+    .restaurant-card {
+      border-radius: 0;
+      margin: 10px 0;
+    }
+    
+    
+    .restaurant-header {
+      padding: 15px;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    
+    .restaurant-header h2 {
+      font-size: 1.5rem;
+    }
+    
+    .restaurant-content {
+      padding: 20px 15px;
+    }
+    
+    .info-grid {
+      grid-template-columns: 1fr;
+    }
+    
+    .info-label {
+      min-width: 120px;
+      font-size: 0.9rem;
+      font-weight: bold;
+
+    }
+    
+    .info-value {
+      font-size: 0.9rem;
+    }
+    
+    .map-container {
+      height: 200px;
+    }
+    
+    .links-grid {
+      flex-direction: column;
+    }
+    
+    .link-button {
+      width: 100%;
+      justify-content: center;
+    }
+    
+    .image-container {
+      max-width: 100%;
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .info-row {
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .info-label {
+      min-width: auto;
+    }
+    
+    .coordinates {
+      flex-direction: column;
+      gap: 4px;
+      align-items: center;
+    }
+
+
+  }
