@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../FireBaseConfig";
 import "./EditRestaurants.css"; 
+
 import RestaurantCard from '../components/RestaurantCard';
+import InfoOfVideoCard from '../components/infoOfVideoCard';
+
 
 
 export default function EditRestaurants() {
   const [restaurants, setRestaurants] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredRestaurants, setFilteredRestaurants] = useState([]);
@@ -106,9 +109,17 @@ export default function EditRestaurants() {
 
           <div className="restaurants-list">
           {currentRestaurants.map(restaurant => (
-            <RestaurantCard key={restaurant.id} restaurant={restaurant} />
+            <div key={restaurant.id}>
+              <RestaurantCard restaurant={restaurant} />
+              <InfoOfVideoCard 
+                restaurant={restaurant} 
+                reviews={restaurant.reviews || []} 
+              />
+            </div>
           ))}
-          </div>
+        </div>
+
+         
         </div>
       )}
     </div>

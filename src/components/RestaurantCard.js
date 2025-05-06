@@ -178,8 +178,6 @@ const RestaurantCard = ({ restaurant}) => {
     );
   };
   
-  
-
 
   return (
     <div className="restaurant-card">
