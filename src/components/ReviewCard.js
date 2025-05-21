@@ -129,10 +129,13 @@ const ReviewCard = ({ video, reviewerName }) => {
       });
       
       alert(`Review ${reviewId} del video: (${video.Title}) guardada correctamente!`);
+      window.location.reload();
+
     } catch (error) {
       console.error("Error al guardar:", error);
       alert('Error al guardar: ' + error.message);
     }
+
   };
 
   const handleDeleteReview = async (reviewId) => {
